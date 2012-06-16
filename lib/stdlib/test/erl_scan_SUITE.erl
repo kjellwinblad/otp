@@ -20,7 +20,7 @@
 -export([all/0, suite/0,groups/0,init_per_suite/1, end_per_suite/1, 
 	 init_per_group/2,end_per_group/2]).
 
--export([ error_1/1, error_2/1, iso88591/1, otp_7810/1]).
+-export([ error_1/1, error_2/1, iso88591/1, otp_7810/1, end_location/1]).
 
 -import(lists, [nth/2,flatten/1]).
 -import(io_lib, [print/1]).
@@ -59,7 +59,7 @@ end_per_testcase(_Case, Config) ->
 suite() -> [{ct_hooks,[ts_install_cth]}].
 
 all() -> 
-    [{group, error}, iso88591, otp_7810].
+    [{group, error}, iso88591, otp_7810, end_location].
 
 groups() -> 
     [{error, [], [error_1, error_2]}].
@@ -191,6 +191,15 @@ otp_7810(Config) when is_list(Config) ->
     ?line ok = attributes_info(),
     ?line ok = set_attribute(),
 
+    ok.
+
+end_location(doc) ->
+    ["Tests that erl_scan correctly track end locations"];
+end_location(suite) ->
+    [];
+end_location(Config) when is_list(Config) ->
+    ?line {ok,Ts,{1,6}} = erl_scan:string("test ", {1, 1}, ['end']),
+    ?line [{atom,[{line,1},{column,1},{'end',{1,5}}],test}] = Ts,
     ok.
 
 reserved_words() ->
