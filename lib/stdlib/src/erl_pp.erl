@@ -468,10 +468,15 @@ lexpr({'fun',_,{function,M,F,A}}, _Prec, Hook) ->
     ArityItem = lexpr(A, Hook),
     ["fun ",NameItem,$:,CallItem,$/,ArityItem];
 lexpr({'fun',_,{clauses,Cs}}, _Prec, Hook) ->
-    {list,[{first,'fun',fun_clauses(Cs, Hook)},'end']};
+    {list,[{first,'fun',fun_clauses(Cs, Hook, unnamed)},'end']};
+lexpr({named_fun,_,Name,Cs}, _Prec, Hook) ->
+    {list,[{first,['fun', " "],fun_clauses(Cs, Hook, {named, Name})},'end']};
 lexpr({'fun',_,{clauses,Cs},Extra}, _Prec, Hook) ->
     {force_nl,fun_info(Extra),
-     {list,[{first,'fun',fun_clauses(Cs, Hook)},'end']}};
+     {list,[{first,'fun',fun_clauses(Cs, Hook, unnamed)},'end']}};
+lexpr({named_fun,_,Name,Cs,Extra}, _Prec, Hook) ->
+    {force_nl,fun_info(Extra),
+     {list,[{first,['fun', " "],fun_clauses(Cs, Hook, {named, Name})},'end']}};
 lexpr({'query',_,Lc}, _Prec, Hook) ->
     {list,[{step,leaf("query"),lexpr(Lc, 0, Hook)},'end']};
 lexpr({call,_,{remote,_,{atom,_,M},{atom,_,F}=N}=Name,Args}, Prec, Hook) ->
@@ -701,8 +706,13 @@ stack_backtrace(S, El, Hook) ->
 %% fun_clauses(Clauses, Hook) -> [Char].
 %%  Print 'fun' clauses.
 
-fun_clauses(Cs, Hook) ->
-    nl_clauses(fun fun_clause/2, [$;], Hook, Cs).
+fun_clauses(Cs, Hook, unnamed) ->
+    nl_clauses(fun fun_clause/2, [$;], Hook, Cs);
+fun_clauses(Cs, Hook, {named, Name}) ->
+    nl_clauses(fun (C, H) ->
+                       {step,Gl,Bl} = fun_clause(C, H),
+                       {step,[atom_to_list(Name),Gl],Bl}
+               end, [$;], Hook, Cs).
 
 fun_clause({clause,_,A,G,B}, Hook) ->
     El = args(A, Hook),

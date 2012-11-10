@@ -340,6 +340,8 @@ expr({'fun',Line,Body,Info},St) ->
 	{function,_M,_F,_A} = Fun4 ->		%This is an error in lint!
 	    {'fun',Line,Fun4,Info}
     end;
+expr({named_fun,Loc,Name,Cs,Info},St) ->
+    {named_fun,Loc,Name,fun_clauses(Cs, St),Info};
 expr({call,Lc,{atom,_,instance}=Name,As0},St) ->
     %% All local functions 'instance(...)' are static by definition,
     %% so they do not take a 'THIS' argument when called
