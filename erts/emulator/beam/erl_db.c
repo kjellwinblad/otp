@@ -173,6 +173,7 @@ typedef enum {
 } db_lock_kind_t;
 
 extern DbTableMethod db_hash;
+extern DbTableMethod db_subtable_hash;
 extern DbTableMethod db_tree;
 
 int user_requested_db_max_tabs;
@@ -1312,15 +1313,19 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 	val = CAR(list_val(list));
 	if (val == am_bag) {
 	    status |= DB_BAG;
-	    status &= ~(DB_SET | DB_DUPLICATE_BAG | DB_ORDERED_SET);
+	    status &= ~(DB_SET | DB_DUPLICATE_BAG | DB_ORDERED_SET | DB_SUBTABLE_HASH);
 	}
 	else if (val == am_duplicate_bag) {
 	    status |= DB_DUPLICATE_BAG;
-	    status &= ~(DB_SET | DB_BAG | DB_ORDERED_SET);
+	    status &= ~(DB_SET | DB_BAG | DB_ORDERED_SET | DB_SUBTABLE_HASH);
 	}
 	else if (val == am_ordered_set) {
 	    status |= DB_ORDERED_SET;
-	    status &= ~(DB_SET | DB_BAG | DB_DUPLICATE_BAG);
+	    status &= ~(DB_SET | DB_BAG | DB_DUPLICATE_BAG | DB_SUBTABLE_HASH);
+	}
+	else if (val == am_subtable_hash) {
+	    status |= DB_SUBTABLE_HASH;
+	    status &= ~(DB_SET | DB_BAG | DB_DUPLICATE_BAG | DB_ORDERED_SET);
 	}
 	/*TT*/
 	else if (is_tuple(val)) {
@@ -1404,6 +1409,9 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
     else if (IS_TREE_TABLE(status)) {
 	meth = &db_tree;
     }
+    else if (IS_SUBTABLE_HASH_TABLE(status)) {
+	meth = &db_subtable_hash;
+    }
     else {
 	BIF_ERROR(BIF_P, BADARG);
     }
@@ -1451,6 +1459,7 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
     cret = 
 #endif
 	meth->db_create(BIF_P, tb);
+
     ASSERT(cret == DB_ERROR_NONE);
 
     erts_smp_spin_lock(&meta_main_tab_main_lock);
@@ -2859,6 +2868,7 @@ void init_db(void)
     }
 
     db_initialize_hash();
+    db_initialize_subtable_hash();
     db_initialize_tree();
 
     /*TT*/
@@ -3613,7 +3623,7 @@ static int free_table_cont(Process *p,
 static Eterm table_info(Process* p, DbTable* tb, Eterm What)
 {
     Eterm ret = THE_NON_VALUE;
-
+    D printf("TABLE INFO CALLED TODO %d \n", erts_smp_atomic_read_nob(&tb->common.nitems));
     if (What == am_size) {
 	ret = make_small(erts_smp_atomic_read_nob(&tb->common.nitems));
     } else if (What == am_type) {
@@ -3623,6 +3633,8 @@ static Eterm table_info(Process* p, DbTable* tb, Eterm What)
 	    ret = am_duplicate_bag;
 	} else if (tb->common.status & DB_ORDERED_SET) {
 	    ret = am_ordered_set;
+	} else if (tb->common.status & DB_SUBTABLE_HASH) {
+	    ret = am_subtable_hash;
 	} else { /*TT*/
 	    ASSERT(tb->common.status & DB_BAG);
 	    ret = am_bag;
