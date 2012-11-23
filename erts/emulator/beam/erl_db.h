@@ -33,9 +33,10 @@
 #undef ERL_THR_PROGRESS_TSD_TYPE_ONLY
 #include "bif.h"
 
-#include "erl_db_util.h" /* Flags */
-#include "erl_db_hash.h" /* DbTableHash */
-#include "erl_db_tree.h" /* DbTableTree */
+#include "erl_db_util.h"          /* Flags */
+#include "erl_db_hash.h"          /* DbTableHash */
+#include "erl_db_subtable_hash.h" /* DbTableSubtableHash */
+#include "erl_db_tree.h"          /* DbTableTree */
 /*TT*/
 
 Uint erts_get_ets_misc_mem_size(void);
@@ -50,9 +51,10 @@ typedef struct {
  * interesting in db.c.
  */
 union db_table {
-    DbTableCommon common; /* Any type of db table */
-    DbTableHash hash;     /* Linear hash array specific data */
-    DbTableTree tree;     /* AVL tree specific data */
+    DbTableCommon common;      /* Any type of db table */
+    DbTableHash hash;          /* Linear hash array specific data */
+    DbTableSubtableHash subtable_hash; /* Subtable stucture with Linear hash tables */
+    DbTableTree tree;          /* AVL tree specific data */
     DbTableRelease release;
     /*TT*/
 };
