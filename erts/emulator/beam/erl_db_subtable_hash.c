@@ -122,7 +122,7 @@ DbTableMethod db_hash;
 ** External interface 
 */
 DbTableMethod db_subtable_hash =
-    {
+        {
         db_create_subtable_hash,
         db_first_subtable_hash,
         db_next_subtable_hash,
@@ -154,7 +154,7 @@ DbTableMethod db_subtable_hash =
 #endif
         db_lookup_dbterm_subtable_hash,
         db_finalize_dbterm_subtable_hash
-    };
+        };
 
 static Uint no_subtables;
 
@@ -191,12 +191,13 @@ int db_create_subtable_hash(Process *p, DbTable *tbl)
     DbTableSubtableHash *tb = &tbl->subtable_hash;
     tb->subtables = (DbTableHash*) malloc(sizeof(DbTableHash)*no_subtables);
     for(i=0; i < no_subtables; i++){
+        
         tb->subtables[i].common = tb->common;
-        tb->common.meth = &db_hash;
-        tb->common.meth->db_create(p, &(tb->subtables[i]));
+        tb->subtables[i].common.meth = &db_hash;
+        db_hash.db_create(p, &(tb->subtables[i]));
     }
 
-    //Init the subtables
+    D printf("CREATE TABLE READY %d\n");
     return DB_ERROR_NONE;
 }
 
@@ -233,20 +234,38 @@ int db_prev_subtable_hash(Process* p,
     D printf("CALLING db_prev_subtable_hash \n");
     return DB_ERROR_NONE;
 }
-int db_put_subtable_hash(DbTable* tb, /* [in out] */ 
+inline DbTableHash * get_subtable_from_key(DbTable* tb_param, Eterm key)
+{
+    DbTableSubtableHash *tb = &tb_param->subtable_hash;
+    HashValue hval = MAKE_HASH(key);
+    DbTableHash *subtable = &(tb->subtables[hval % no_subtables]);
+    return subtable;
+}
+inline DbTableHash * get_subtable_from_object(DbTable* tb_param, Eterm obj)
+{
+    DbTableSubtableHash *tb = &tb_param->subtable_hash;
+    Eterm key = GETKEY(tb, tuple_val(obj));
+    HashValue hval = MAKE_HASH(key);
+    DbTableHash *subtable = &(tb->subtables[hval % no_subtables]);
+    return subtable;
+}
+int db_put_subtable_hash(DbTable* tb_param, /* [in out] */ 
                          Eterm obj,
                          int key_clash_fail)
 {
-    D printf("CALLING db_put_subtable_hash  \n");
-    return DB_ERROR_NONE;
+    D printf("CALLING db_put_subtable_hash \n");
+    DbTableHash *subtable = get_subtable_from_object(tb_param, obj);
+    return db_hash.db_put(subtable, obj, key_clash_fail);
 }
 int db_get_subtable_hash(Process* p, 
-                         DbTable* tb, /* [in out] */ 
+                         DbTable* tb_param, 
                          Eterm key, 
                          Eterm* ret)
 {
     D printf("CALLING db_get_subtable_hash \n");
-    return DB_ERROR_NONE;
+    DbTableHash *subtable = get_subtable_from_key(tb_param, key);
+    D printf("FOUND \n");
+    return db_hash.db_get(p, subtable, key, ret);
 }
 int db_get_element_subtable_hash(Process* p, 
                                  DbTable* tb, /* [in out] */ 
@@ -269,7 +288,8 @@ int db_erase_subtable_hash(DbTable* tb,  /* [in out] */
                            Eterm* ret)
 {
     D printf("CALLING db_erase_subtable_hash \n");
-    return DB_ERROR_NONE;
+    DbTableHash *subtable = get_subtable_from_key(tb, key);;
+    return db_hash.db_erase(subtable, key, ret);
 }
 int db_erase_object_subtable_hash(DbTable* tb, /* [in out] */ 
                                   Eterm obj,

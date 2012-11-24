@@ -1064,8 +1064,8 @@ BIF_RETTYPE ets_insert_2(BIF_ALIST_2)
 	    goto badarg;
 	}
 	for (lst = BIF_ARG_2; is_list(lst); lst = CDR(list_val(lst))) {
-	    cret = meth->db_put(tb, CAR(list_val(lst)), 0);
-	    if (cret != DB_ERROR_NONE)
+            cret = meth->db_put(tb, CAR(list_val(lst)), 0);
+            if (cret != DB_ERROR_NONE)
 		break;
 	}
     } else {
@@ -1073,6 +1073,7 @@ BIF_RETTYPE ets_insert_2(BIF_ALIST_2)
 	    (arityval(*tuple_val(BIF_ARG_2)) < tb->common.keypos)) {
 	    goto badarg;
 	}
+        cret = meth->db_put(tb, BIF_ARG_2, 0);
 	cret = meth->db_put(tb, BIF_ARG_2, 0);
     }
 
@@ -1410,7 +1411,9 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 	meth = &db_tree;
     }
     else if (IS_SUBTABLE_HASH_TABLE(status)) {
+        D printf("ASSIGN METHOD TABLE\n");
 	meth = &db_subtable_hash;
+        D printf("AFTER ASSIGN METHOD TABLE %d \n", meth);
     }
     else {
 	BIF_ERROR(BIF_P, BADARG);

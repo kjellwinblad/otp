@@ -167,15 +167,6 @@ static ERTS_INLINE void add_fixed_deletion(DbTableHash* tb, int ix)
     }while (was_next != exp_next);
 }
 
-
-#define MAX_HASH 0xEFFFFFFFUL
-#define INVALID_HASH 0xFFFFFFFFUL
-
-/* optimised version of make_hash (normal case? atomic key) */
-#define MAKE_HASH(term) \
-    ((is_atom(term) ? (atom_tab(atom_val(term))->slot.bucket.hvalue) : \
-      make_hash2(term)) % MAX_HASH)
-
 #ifdef ERTS_SMP
 #  define DB_HASH_LOCK_MASK (DB_HASH_LOCK_CNT-1)
 #  define GET_LOCK(tb,hval) (&(tb)->locks->lck_vec[(hval) & DB_HASH_LOCK_MASK].lck)
@@ -668,7 +659,7 @@ Uint db_kept_items_hash(DbTableHash *tb)
 int db_create_hash(Process *p, DbTable *tbl)
 {
     DbTableHash *tb = &tbl->hash;
-
+    D printf("CREATE HASH TABLE!!!\n");
     erts_smp_atomic_init_nob(&tb->szm, SEGSZ_MASK);
     erts_smp_atomic_init_nob(&tb->nactive, SEGSZ);
     erts_smp_atomic_init_nob(&tb->fixdel, (erts_aint_t)NULL);

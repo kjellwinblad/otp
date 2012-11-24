@@ -37,6 +37,15 @@ basic_operations_test(suite) ->
 basic_operations_test(doc) ->
     ["Test basic functionality of the subtable_hash table type"];
 basic_operations_test(Config) when is_list(Config) ->
-    ets:new(name, [subtable_hash]),
-    io:format("CREATED ~n"),
+    io:format("START TEST ~n"),
+    Table = ets:new(name, [subtable_hash]),
+    io:format("CREATED ~p ~n", [Table]),
+    ets:insert(Table, {hello_world}),
+    io:format("INSERTED ~n"),
+    LookupResult = ets:lookup(Table, hello_world),
+    io:format("LOOKED UP ~p ~n", [LookupResult]),
+    LookupResult = [{hello_world}],
+    ets:delete(Table, hello_world),
+    LookupResult2 = ets:lookup(Table, hello_world),
+    [] = LookupResult2,
     ok.

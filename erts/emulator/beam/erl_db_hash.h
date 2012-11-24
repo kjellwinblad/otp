@@ -33,6 +33,15 @@ typedef struct hash_db_term {
     DbTerm dbterm;         /* The actual term */
 } HashDbTerm;
 
+
+#define MAX_HASH 0xEFFFFFFFUL
+#define INVALID_HASH 0xFFFFFFFFUL
+
+/* optimised version of make_hash (normal case? atomic key) */
+#define MAKE_HASH(term) \
+    ((is_atom(term) ? (atom_tab(atom_val(term))->slot.bucket.hvalue) : \
+      make_hash2(term)) % MAX_HASH)
+
 #define DB_HASH_LOCK_CNT 16
 typedef struct db_table_hash_fine_locks {
     union {
