@@ -5,7 +5,7 @@
 #include "erl_db_hash.h"
 
 
-#define KJELL_DEBUG
+//#define KJELL_DEBUG
 
 #ifdef KJELL_DEBUG
  #define D if(1) 
