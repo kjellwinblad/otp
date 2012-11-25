@@ -18,6 +18,7 @@ void db_initialize_subtable_hash(void);
 typedef struct db_table_subtable_hash {
     DbTableCommon common;
     DbTableHash* subtables;
+    int no_deleted_subtables; 
 } DbTableSubtableHash;
 
 

@@ -190,8 +190,8 @@ int db_create_subtable_hash(Process *p, DbTable *tbl)
     D printf("CALLING db_create_subtable_hash %d\n", no_subtables);
     DbTableSubtableHash *tb = &tbl->subtable_hash;
     tb->subtables = (DbTableHash*) malloc(sizeof(DbTableHash)*no_subtables);
+    tb->no_deleted_subtables = 0;
     for(i=0; i < no_subtables; i++){
-        
         tb->subtables[i].common = tb->common;
         tb->subtables[i].common.meth = &db_hash;
         db_hash.db_create(p, &(tb->subtables[i]));
@@ -373,17 +373,35 @@ int db_delete_all_objects_subtable_hash(Process* p,
     return DB_ERROR_NONE;
 }
 
-int db_free_table_subtable_hash(DbTable* db /* [in out] */ )
+
+int db_free_table_subtable_hash(DbTable* tbl /* [in out] */ )
 {
-    D printf("CALLING db_free_table_subtable_hash \n");
-    return DB_ERROR_NONE;
+    while (!db_free_table_continue_subtable_hash(tbl))
+	;
+    return 0;
 }
+
 int db_free_table_continue_subtable_hash(DbTable* db)
 {
     D printf("CALLING db_free_table_continue_subtable_hash \n");
-    //TODO: Do not continue if we have not freed the table.
-    return 1;
+    DbTableSubtableHash *tb = &db->subtable_hash;
+    int no_deleted_subtables = tb->no_deleted_subtables;
+    int stop_freeing_table;
+    if(no_deleted_subtables == no_subtables){
+        free(tb->subtables);
+        return 1;   
+    } else {
+        DbTableHash *subtable = &(tb->subtables[no_deleted_subtables]);
+        stop_freeing_table = db_hash.db_free_table_continue(subtable);
+        if(stop_freeing_table) {
+            tb->no_deleted_subtables = no_deleted_subtables + 1;
+            return 0;
+        } else {
+            return 0;
+        }
+    }
 }
+
     
 void db_print_subtable_hash(int to, 
                             void* to_arg, 
