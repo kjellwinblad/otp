@@ -292,22 +292,28 @@ static ERTS_INLINE void db_lock(DbTable* tb, db_lock_kind_t kind)
 #ifdef ERTS_SMP
     ASSERT(tb != meta_pid_to_tab && tb != meta_pid_to_fixed_tab);
     if (tb->common.type & DB_FINE_LOCKED) {
-	if (kind == LCK_WRITE) {	   
+        D printf("TYPE FINE\n");
+	if (kind == LCK_WRITE) {
+            D printf("LOCK 1\n");
 	    erts_smp_rwmtx_rwlock(&tb->common.rwlock);
 	    tb->common.is_thread_safe = 1;
-	} else {	
+	} else {
+            D printf("LOCK 2\n");	
 	    erts_smp_rwmtx_rlock(&tb->common.rwlock);
 	    ASSERT(!tb->common.is_thread_safe);
 	}
     }
     else
     { 
+        D printf("TYPE NOT FINE GRAINED\n");
 	switch (kind) {
 	case LCK_WRITE:
 	case LCK_WRITE_REC:
+            D printf("LOCK 3\n");
 	    erts_smp_rwmtx_rwlock(&tb->common.rwlock);
 	    break;
 	default:
+            D printf("LOCK 4\n");
 	    erts_smp_rwmtx_rlock(&tb->common.rwlock);
 	}
 	ASSERT(tb->common.is_thread_safe);
@@ -1073,7 +1079,6 @@ BIF_RETTYPE ets_insert_2(BIF_ALIST_2)
 	    (arityval(*tuple_val(BIF_ARG_2)) < tb->common.keypos)) {
 	    goto badarg;
 	}
-        cret = meth->db_put(tb, BIF_ARG_2, 0);
 	cret = meth->db_put(tb, BIF_ARG_2, 0);
     }
 

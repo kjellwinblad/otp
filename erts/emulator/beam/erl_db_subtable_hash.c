@@ -180,7 +180,7 @@ Uint calculate_no_subtables()
     }
 }
 
-void db_initialize_subtable_hash(){
+void db_initialize_subtable_hash(void){
     no_subtables = calculate_no_subtables();
 }
 
@@ -191,9 +191,15 @@ int db_create_subtable_hash(Process *p, DbTable *tbl)
     DbTableSubtableHash *tb = &tbl->subtable_hash;
     tb->subtables = (DbTableHash*) malloc(sizeof(DbTableHash)*no_subtables);
     tb->no_deleted_subtables = 0;
+#ifdef ERTS_SMP
+    tb->common.type = tb->common.type | DB_FINE_LOCKED;
+#endif    
     for(i=0; i < no_subtables; i++){
         tb->subtables[i].common = tb->common;
         tb->subtables[i].common.meth = &db_hash;
+#ifdef ERTS_SMP
+        tb->subtables[i].common.is_thread_safe = 0;
+#endif
         db_hash.db_create(p, &(tb->subtables[i]));
     }
 

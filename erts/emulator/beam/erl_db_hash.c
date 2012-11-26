@@ -187,12 +187,12 @@ static ERTS_INLINE erts_smp_rwmtx_t* RLOCK_HASH(DbTableHash* tb, HashValue hval)
 static ERTS_INLINE erts_smp_rwmtx_t* WLOCK_HASH(DbTableHash* tb, HashValue hval)
 {
     if (tb->common.is_thread_safe) {
-	return NULL;
+        return NULL;
     } else {
 	erts_smp_rwmtx_t* lck = GET_LOCK(tb,hval);
 	ASSERT(tb->common.type & DB_FINE_LOCKED);
 	erts_smp_rwmtx_rwlock(lck);
-	return lck;
+        return lck;
     }
 }
 
@@ -659,7 +659,6 @@ Uint db_kept_items_hash(DbTableHash *tb)
 int db_create_hash(Process *p, DbTable *tbl)
 {
     DbTableHash *tb = &tbl->hash;
-    D printf("CREATE HASH TABLE!!!\n");
     erts_smp_atomic_init_nob(&tb->szm, SEGSZ_MASK);
     erts_smp_atomic_init_nob(&tb->nactive, SEGSZ);
     erts_smp_atomic_init_nob(&tb->fixdel, (erts_aint_t)NULL);
