@@ -156,8 +156,6 @@ DbTableMethod db_subtable_hash =
         db_finalize_dbterm_subtable_hash
         };
 
-static Uint no_subtables;
-
 Uint calculate_no_subtables()
 {
     Uint next;
@@ -181,24 +179,27 @@ Uint calculate_no_subtables()
 }
 
 void db_initialize_subtable_hash(void){
-    no_subtables = calculate_no_subtables();
+    
 }
 
 int db_create_subtable_hash(Process *p, DbTable *tbl)
 {
     int i;
-    D printf("CALLING db_create_subtable_hash %d\n", no_subtables);
     DbTableSubtableHash *tb = &tbl->subtable_hash;
-    tb->subtables = (DbTableHash*) malloc(sizeof(DbTableHash)*no_subtables);
+    int no_subtables = calculate_no_subtables();
+    D printf("CALLING db_create_subtable_hash %d\n", no_subtables);
+    tb->no_subtables = no_subtables;
+    tb->subtables = (SubtableWrapper*) malloc(sizeof(SubtableWrapper)*no_subtables);
     tb->no_deleted_subtables = 0;
 #ifdef ERTS_SMP
     tb->common.type = tb->common.type | DB_FINE_LOCKED;
 #endif    
     for(i=0; i < no_subtables; i++){
-        tb->subtables[i].common = tb->common;
-        tb->subtables[i].common.meth = &db_hash;
+        DbTableHash *subtable = &(tb->subtables[i]);
+        subtable->common = tb->common;
+        subtable->common.meth = &db_hash;
 #ifdef ERTS_SMP
-        tb->subtables[i].common.is_thread_safe = 0;
+        subtable->common.is_thread_safe = 0;
 #endif
         db_hash.db_create(p, &(tb->subtables[i]));
     }
@@ -244,7 +245,7 @@ inline DbTableHash * get_subtable_from_key(DbTable* tb_param, Eterm key)
 {
     DbTableSubtableHash *tb = &tb_param->subtable_hash;
     HashValue hval = MAKE_HASH(key);
-    DbTableHash *subtable = &(tb->subtables[hval % no_subtables]);
+    DbTableHash *subtable = &(tb->subtables[hval % tb->no_subtables]);
     return subtable;
 }
 inline DbTableHash * get_subtable_from_object(DbTable* tb_param, Eterm obj)
@@ -252,7 +253,7 @@ inline DbTableHash * get_subtable_from_object(DbTable* tb_param, Eterm obj)
     DbTableSubtableHash *tb = &tb_param->subtable_hash;
     Eterm key = GETKEY(tb, tuple_val(obj));
     HashValue hval = MAKE_HASH(key);
-    DbTableHash *subtable = &(tb->subtables[hval % no_subtables]);
+    DbTableHash *subtable = &(tb->subtables[hval % tb->no_subtables]);
     return subtable;
 }
 int db_put_subtable_hash(DbTable* tb_param, /* [in out] */ 
@@ -393,7 +394,7 @@ int db_free_table_continue_subtable_hash(DbTable* db)
     DbTableSubtableHash *tb = &db->subtable_hash;
     int no_deleted_subtables = tb->no_deleted_subtables;
     int stop_freeing_table;
-    if(no_deleted_subtables == no_subtables){
+    if(no_deleted_subtables == tb->no_subtables){
         free(tb->subtables);
         return 1;   
     } else {

@@ -15,10 +15,17 @@
 
 void db_initialize_subtable_hash(void);
 
+typedef union subtable_wrapper {
+    DbTableHash subtable;
+    byte _cache_line_alignment[sizeof(DbTableHash) + (128 - (sizeof(DbTableHash) % 128))];
+} SubtableWrapper;
+
+
 typedef struct db_table_subtable_hash {
     DbTableCommon common;
-    DbTableHash* subtables;
-    int no_deleted_subtables; 
+    int no_subtables;
+    SubtableWrapper* subtables;
+    int no_deleted_subtables;
 } DbTableSubtableHash;
 
 
