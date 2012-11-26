@@ -244,7 +244,7 @@ int db_prev_subtable_hash(Process* p,
 inline DbTableHash * get_subtable_from_key(DbTable* tb_param, Eterm key)
 {
     DbTableSubtableHash *tb = &tb_param->subtable_hash;
-    HashValue hval = MAKE_HASH(key);
+    HashValue hval = make_hash2(key);
     DbTableHash *subtable = &(tb->subtables[hval % tb->no_subtables]);
     return subtable;
 }
@@ -252,7 +252,7 @@ inline DbTableHash * get_subtable_from_object(DbTable* tb_param, Eterm obj)
 {
     DbTableSubtableHash *tb = &tb_param->subtable_hash;
     Eterm key = GETKEY(tb, tuple_val(obj));
-    HashValue hval = MAKE_HASH(key);
+    HashValue hval = make_hash2(key);
     DbTableHash *subtable = &(tb->subtables[hval % tb->no_subtables]);
     return subtable;
 }
