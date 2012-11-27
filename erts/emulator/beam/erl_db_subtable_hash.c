@@ -263,6 +263,7 @@ int db_put_subtable_hash(DbTable* tb_param, /* [in out] */
     D printf("CALLING db_put_subtable_hash \n");
     DbTableHash *subtable = get_subtable_from_object(tb_param, obj);
     return db_hash.db_put(subtable, obj, key_clash_fail);
+    //return DB_ERROR_NONE;
 }
 int db_get_subtable_hash(Process* p, 
                          DbTable* tb_param, 

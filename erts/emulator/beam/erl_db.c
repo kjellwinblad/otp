@@ -298,7 +298,7 @@ static ERTS_INLINE void db_lock(DbTable* tb, db_lock_kind_t kind)
 	    erts_smp_rwmtx_rwlock(&tb->common.rwlock);
 	    tb->common.is_thread_safe = 1;
 	} else {
-            D printf("LOCK 2\n");	
+            D printf("LOCK 2 %d\n", tb->common.is_thread_safe);	
 	    erts_smp_rwmtx_rlock(&tb->common.rwlock);
 	    ASSERT(!tb->common.is_thread_safe);
 	}
