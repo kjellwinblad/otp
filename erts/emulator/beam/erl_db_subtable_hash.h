@@ -24,7 +24,7 @@ typedef union subtable_wrapper {
 typedef struct db_table_subtable_hash {
     DbTableCommon common;
     int no_subtables;
-    SubtableWrapper* subtables;
+    SubtableWrapper** subtables;
     int no_deleted_subtables;
 } DbTableSubtableHash;
 

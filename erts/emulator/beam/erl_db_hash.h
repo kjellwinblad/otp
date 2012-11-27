@@ -42,7 +42,7 @@ typedef struct hash_db_term {
     ((is_atom(term) ? (atom_tab(atom_val(term))->slot.bucket.hvalue) : \
       make_hash2(term)) % MAX_HASH)
 
-#define DB_HASH_LOCK_CNT 16
+#define DB_HASH_LOCK_CNT 256
 typedef struct db_table_hash_fine_locks {
     union {
 	erts_smp_rwmtx_t lck;
