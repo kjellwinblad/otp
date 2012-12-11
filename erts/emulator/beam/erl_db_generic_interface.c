@@ -161,7 +161,7 @@ DbTableMethod db_generic_interface =
     };
 
 //Internal functions prototypes
-int compare(DbTerm * element, Eterm * key, int key_position);
+int compare(Eterm * element, Eterm * key);
 
 
 //Function declarations
@@ -187,12 +187,12 @@ static ERTS_INLINE DbTerm * new_dbterm(DbTable *tb, Eterm obj)
     return p;
 }
 
-int compare(DbTerm * element, Eterm * key, int key_position)
+int compare(Eterm * key1, Eterm * key2)
 {
-   return cmp_rel(*key,
-                  key,
-                  (*((element->tpl) + key_position)), 
-                  element->tpl);
+    return cmp_rel(*key2,
+                   key2,
+                   *key1, 
+                   key1);
 }
 
 
@@ -200,10 +200,12 @@ int db_create_generic_interface(Process *p, DbTable *tbl)
 {
     DbTableGenericInterface *tb = &tbl->generic_interface;
 
-    KVSet * skiplist = new_skiplist((int (*)(void *, void *, int))compare,
-                                    free, 
-                                    malloc, 
-                                    tbl->common.keypos);
+    KVSet * skiplist = 
+        new_skiplist((int (*)(void *, void *))compare,
+                     free, 
+                     malloc, 
+                     sizeof(DbTerm) - sizeof(Eterm) + sizeof(Eterm) * tbl->common.keypos);
+
     tb->kvset = skiplist;
 
     return DB_ERROR_NONE;
@@ -251,9 +253,9 @@ int db_put_generic_interface(DbTable* tbl, /* [in out] */
 
     KVSet *tb = tbl->generic_interface.kvset;
 
-    int key_offset = sizeof(DbTerm)  + tbl->common.keypos -1;
+    //int key_offset = sizeof(DbTerm) + tbl->common.keypos -1;
 
-    void * element_to_free = tb->funs.put(tb, element_to_put, key_offset);
+    void * element_to_free = tb->funs.put(tb, element_to_put);
     
     if(NULL != element_to_free) {
         free_term(tbl, element_to_free);
