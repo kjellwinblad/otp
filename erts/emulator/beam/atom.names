@@ -504,7 +504,7 @@ atom stderr_to_stdout
 atom stop
 atom stream
 atom sunrm
-atom subtable_hash
+atom generic_interface
 atom suspend
 atom suspended
 atom suspending
