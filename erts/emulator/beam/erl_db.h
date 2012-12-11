@@ -35,7 +35,7 @@
 
 #include "erl_db_util.h"          /* Flags */
 #include "erl_db_hash.h"          /* DbTableHash */
-#include "erl_db_subtable_hash.h" /* DbTableSubtableHash */
+#include "erl_db_generic_interface.h" /* DbTableSubtableHash */
 #include "erl_db_tree.h"          /* DbTableTree */
 /*TT*/
 
@@ -53,7 +53,7 @@ typedef struct {
 union db_table {
     DbTableCommon common;      /* Any type of db table */
     DbTableHash hash;          /* Linear hash array specific data */
-    DbTableSubtableHash subtable_hash; /* Subtable stucture with Linear hash tables */
+    DbTableGenericInterface generic_interface; /* Subtable stucture with Linear hash tables */
     DbTableTree tree;          /* AVL tree specific data */
     DbTableRelease release;
     /*TT*/
