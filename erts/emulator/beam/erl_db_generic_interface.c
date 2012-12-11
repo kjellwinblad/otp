@@ -253,8 +253,6 @@ int db_put_generic_interface(DbTable* tbl, /* [in out] */
 
     KVSet *tb = tbl->generic_interface.kvset;
 
-    //int key_offset = sizeof(DbTerm) + tbl->common.keypos -1;
-
     void * element_to_free = tb->funs.put(tb, element_to_put);
     
     if(NULL != element_to_free) {
