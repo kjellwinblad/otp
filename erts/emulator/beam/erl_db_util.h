@@ -242,7 +242,7 @@ typedef struct db_table_common {
 #define DB_PUBLIC        (1 << 3)
 #define DB_BAG           (1 << 4)
 #define DB_SET           (1 << 5)
-#define DB_SUBTABLE_HASH (1 << 6)
+#define DB_GENERIC_INTERFACE (1 << 6)
 #define DB_FINE_LOCKED   (1 << 7)  /* fine grained locking enabled */
 #define DB_DUPLICATE_BAG (1 << 8)
 #define DB_ORDERED_SET   (1 << 9)
@@ -253,8 +253,8 @@ typedef struct db_table_common {
 
 #define IS_HASH_TABLE(Status) (!!((Status) & \
 				  (DB_BAG | DB_SET | DB_DUPLICATE_BAG)))
-#define IS_SUBTABLE_HASH_TABLE(Status) (!!((Status) & \
-                                           DB_SUBTABLE_HASH))
+#define IS_GENERIC_INTERFACE_TABLE(Status) (!!((Status) & \
+                                           DB_GENERIC_INTERFACE))
 #define IS_TREE_TABLE(Status) (!!((Status) & \
 				  DB_ORDERED_SET))
 #define NFIXED(T) (erts_refc_read(&(T)->common.ref,0))
