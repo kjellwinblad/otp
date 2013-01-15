@@ -209,16 +209,65 @@ void generic_interface_free(void * data){
 int db_create_generic_interface(Process *p, DbTable *tbl)
 {
     DbTableGenericInterface *tb = &tbl->generic_interface;
+    KVSet* ds;
+    struct gi_options_list* ol_ptr;
 
+    switch(tb->type) {
+	case SKIPLIST:
+	   printf("THIS IS A SKIPLIST\n"); 
+	    ds = 
+		new_skiplist((int (*)(void *, void *))compare,
+			     free, 
+			     malloc, 
+			     sizeof(DbTerm) - sizeof(Eterm) + sizeof(Eterm) * tbl->common.keypos);
+
+	    break;
+	case TESTMAP:
+	    ol_ptr = tb->options;
+	    while(ol_ptr) {
+		printf("\noption is %s\n", ol_ptr->option.first.name);
+		ol_ptr = ol_ptr->next;
+	    }
+	    /* ds = new_cppset_default(); */
+	    ds = new_skiplist((int (*)(void *, void *))compare,
+			     free, 
+			     malloc, 
+			     sizeof(DbTerm) - sizeof(Eterm) + sizeof(Eterm) * tbl->common.keypos);
+
+	    break;
+	case ERROR_NO_TYPE:
+	default:
+	    /* this should never happen */
+	    printf("eRROR ErROR ERrOR ERRoR ERROr\nExpect a segfault next.\n"); 
+	    ds = NULL;
+    }
+    tb->kvset = ds;
+    
+    /* free the gi_options linked list again */
+    while(tb->options) {
+	struct gi_options_list* delme = tb->options;
+	tb->options = tb->options->next;
+	switch(delme->option.type) {
+	    case ATOM:
+		free(delme->option.second.name);
+	    case SETTING:
+	    case INTEGER:
+		free(delme->option.first.name);
+		break;
+	}
+	free(delme);
+    }
+
+    /*
     KVSet * skiplist = 
         new_skiplist((int (*)(void *, void *))compare,
                      generic_interface_free, 
                      generic_interface_malloc, 
                      sizeof(DbTerm) - sizeof(Eterm) + sizeof(Eterm) * tbl->common.keypos);
 
-    tb->kvset = skiplist;
-
-    return DB_ERROR_NONE;
+    */
+    if(ds) return DB_ERROR_NONE;
+    else return DB_ERROR_UNSPEC;
 }
 
 int db_first_generic_interface(Process* p, 
@@ -463,4 +512,20 @@ void db_finalize_dbterm_generic_interface(DbUpdateHandle* handle)
 {
     D printf("CALLING db_finalize_dbterm_generic_interface \n");
 
+}
+
+/* helper for getting atom name out of an Eterm */
+char* atom_name(Eterm e) {
+    Atom* a = atom_tab(atom_val(e));
+    char* res = malloc(a->len+1);
+    strncpy(res, (char*)a->name, a->len);
+    res[a->len] = '\0';
+    return res;
+}
+
+enum gi_type get_gi_subtype(Eterm e) {
+    char* name = atom_name(e);
+    if(!strcmp(name, "skiplist")) return SKIPLIST;
+    else if(!strcmp(name, "testmap")) return TESTMAP;
+    else return ERROR_NO_TYPE;
 }
