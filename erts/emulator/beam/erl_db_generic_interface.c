@@ -161,7 +161,9 @@ DbTableMethod db_generic_interface =
     };
 
 //Internal functions prototypes
-int compare(Eterm * element, Eterm * key);
+static int compare(Eterm * element, Eterm * key);
+static void * generic_interface_malloc(size_t size);
+static void generic_interface_free(void *);
 
 
 //Function declarations
@@ -195,6 +197,14 @@ int compare(Eterm * key1, Eterm * key2)
                    key1);
 }
 
+void * generic_interface_malloc(size_t size){
+    return erts_alloc(ERTS_ALC_T_DB_TERM, size);
+}
+
+void generic_interface_free(void * data){
+    erts_free(ERTS_ALC_T_DB_TERM, data);
+}
+
 
 int db_create_generic_interface(Process *p, DbTable *tbl)
 {
@@ -202,8 +212,8 @@ int db_create_generic_interface(Process *p, DbTable *tbl)
 
     KVSet * skiplist = 
         new_skiplist((int (*)(void *, void *))compare,
-                     free, 
-                     malloc, 
+                     generic_interface_free, 
+                     generic_interface_malloc, 
                      sizeof(DbTerm) - sizeof(Eterm) + sizeof(Eterm) * tbl->common.keypos);
 
     tb->kvset = skiplist;
