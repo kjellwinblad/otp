@@ -157,12 +157,6 @@ DbTableMethod db_generic_interface =
         db_finalize_dbterm_generic_interface
     };
 
-//Internal functions prototypes
-/* TODO: move to other file */
-static int compare(Eterm * element, Eterm * key);
-static void * generic_interface_malloc(size_t size);
-static void generic_interface_free(void *);
-
 //Function declarations
 void db_initialize_generic_interface(){
 
@@ -186,24 +180,6 @@ static ERTS_INLINE DbTerm * new_dbterm(DbTable *tb, Eterm obj)
     return p;
 }
 
-/* TODO: move to other file */
-int compare(Eterm * key1, Eterm * key2)
-{
-    return cmp_rel(*key2,
-                   key2,
-                   *key1, 
-                   key1);
-}
-
-void * generic_interface_malloc(size_t size){
-    return erts_alloc(ERTS_ALC_T_DB_TERM, size);
-}
-
-void generic_interface_free(void * data){
-    erts_free(ERTS_ALC_T_DB_TERM, data);
-}
-
-/* END TODO: move to other file */
 
 int db_create_generic_interface(Process *p, DbTable *tbl)
 {
@@ -226,14 +202,6 @@ int db_create_generic_interface(Process *p, DbTable *tbl)
 	free(delme);
     }
 
-    /*
-    KVSet * skiplist = 
-        new_skiplist((int (*)(void *, void *))compare,
-                     generic_interface_free, 
-                     generic_interface_malloc, 
-                     sizeof(DbTerm) - sizeof(Eterm) + sizeof(Eterm) * tbl->common.keypos);
-
-    */
     if(tb->kvset) return DB_ERROR_NONE;
     else return DB_ERROR_UNSPEC;
 }

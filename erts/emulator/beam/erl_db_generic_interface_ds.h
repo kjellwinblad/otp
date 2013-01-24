@@ -24,5 +24,8 @@ KVSet* create_stlmap(void);
 
 /* commonly used by C-implemented datastructures */
 int compare(Eterm * element, Eterm * key);
+void * generic_interface_malloc(size_t size);
+void generic_interface_free(void *);
+
 
 #endif /* _CPP_DS_H */
