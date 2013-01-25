@@ -2,6 +2,9 @@
 #define KVSET_HPP KVSET_HPP
 
 #include <cstdlib>
+#include <cstddef>
+#include <new>
+#include <limits>
 #include "kvset.h"
 
 /**
@@ -79,6 +82,60 @@ class KVcompare {
 */
 };
 
+template<
+	class T,
+	void* (*Alloc)(size_t),
+	void (*Free)(void*)
+>
+struct KVallocator {
+	typedef size_t size_type;
+	typedef ptrdiff_t difference_type;
+	typedef T* pointer;
+	typedef const T* const_pointer;
+	typedef T& reference;
+	typedef const T& const_reference;
+	typedef T value_type;
+
+	template <class U> struct rebind { typedef KVallocator<U, Alloc, Free> other; };
+	KVallocator() throw() {}
+	KVallocator(const KVallocator&) throw() {}
+
+	template <class U> KVallocator(const KVallocator<U, Alloc, Free>&) throw(){}
+
+	~KVallocator() throw() {}
+
+	pointer address(reference x) const { return &x; }
+	const_pointer address(const_reference x) const { return &x; }
+
+	pointer allocate(size_type s, void const * = 0) {
+		if (0 == s) // TODO YODA STYLE??
+			return NULL;
+		pointer temp = (pointer)Alloc(s * sizeof(T));
+		if (temp == NULL)
+			throw std::bad_alloc();
+		return temp;
+	}
+
+	void deallocate(pointer p, size_type = 0) {
+		Free(p);
+	}
+
+	size_type max_size() const throw() {
+		return std::numeric_limits<size_t>::max() / sizeof(T);
+	}
+
+	void construct(pointer p, const T& val) {
+		new((void *)p) T(val);
+	}
+
+	void destroy(pointer p) {
+		p->~T();
+	}
+	private:
+		KVallocator& operator=(const KVallocator&);
+};
+
+template <typename T> using StandardAllocator = KVallocator<T, std::malloc, std::free>;
 
 /**
  * @internal
@@ -90,21 +147,21 @@ class KVcompare {
  */
 template <
 	typename KeyType,
-	typename Comparator = KVcompare<KeyType, default_compare<KeyType, void*>>,
-	void* (*Malloc)(size_t) = std::malloc,
-	void (*Free)(void*) = std::free
+	class Comparator = KVcompare<KeyType, default_compare<KeyType, void*>>,
+	template <typename T> class Allocator = StandardAllocator
 >
 struct standard_functions {
 	/** @brief comparision function wrapper */
 	static bool compare(KeyType a, KeyType b) {
 		return (Comparator()(a, b));
 	}
-	
-	/** @brief freeing function wrapper */
-	static void free(void* data) { Free(data); }
 
-	/** @brief memory allocation function wrapper */
-	static void* alloc(size_t size) { return Malloc(size); }
+	template <typename T> using Alloc = Allocator<T>;
+//	/** @brief freeing function wrapper */
+//	static void free(void* data) { Allocator<::free(data); }
+
+//	/** @brief memory allocation function wrapper */
+//	static void* alloc(size_t size) { return Malloc(size); }
 };
 
 /**
@@ -257,9 +314,13 @@ template <
 >
 void delete_table(kv_set* set, void (*f)(void* context, void* element), void* context) {
 	typedef kv_set_instance<Impl, K, S, V, KPacker, VPacker, VExtractor> FS;
+	typedef typename FS::stdfuns::template Alloc<kv_set_t<FS>> Allocator;
+	Allocator allocator;
+//	kv_set_t<FS>* r = allocator.allocate(1);
 	//TODO delete elements in table here
-	reinterpret_cast<kv_set_t<FS>*>(set)->type_specific_data.~FS();
-	FS::stdfuns::free(set);
+	auto p = reinterpret_cast<kv_set_t<FS>*>(set);
+	p->type_specific_data.~FS();
+	allocator.deallocate(p);
 }
 
 
@@ -279,8 +340,9 @@ void delete_table(kv_set* set, void (*f)(void* context, void* element), void* co
 template <template<typename, class, typename> class Impl, typename K = long*, class S = standard_functions<K>, typename V = K, class KPacker = NullPacker<K>, class VPacker = NullPacker<V>, class VExtractor = NullExtractor<V>>
 kv_set* make_kv_set() {
 	typedef kv_set_instance<Impl, K, S, V, KPacker, VPacker, VExtractor> FS;
-	void* memory = FS::stdfuns::alloc(sizeof(KVSet) + sizeof(FS));
-	kv_set* r = static_cast<kv_set*>(memory);
+	typedef typename FS::stdfuns::template Alloc<kv_set_t<FS>> Allocator;
+	Allocator allocator;
+	kv_set_t<FS>* r = allocator.allocate(1);
 	new (&r->type_specific_data) FS;
 	r->funs.delete_table = &delete_table<Impl, K, S, V, KPacker, VPacker, VExtractor>;
 	r->funs.put = &FS::classfuns::put;
@@ -293,7 +355,7 @@ kv_set* make_kv_set() {
 	r->funs.next = &FS::classfuns::next;
 	r->funs.previous = &FS::classfuns::previous;
 	
-	return r;
+	return reinterpret_cast<kv_set*>(r);
 }
 
 /**
