@@ -15,7 +15,7 @@ class stlset {
 		}
 	};
 
-	std::set<ValueType, Cmp> m;
+	std::set<ValueType, Cmp, typename StdFuns::template Alloc<ValueType>> m;
 	public:
 		stlset() : m() {}
 		ValueType put(ValueType key)     {

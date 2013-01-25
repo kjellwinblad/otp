@@ -16,7 +16,7 @@ class stlmap {
 			return StdFuns::compare(k1, k2);
 		}
 	};
-	typedef std::map<KeyType, ValueType, Cmp> Map;
+	typedef std::map<KeyType, ValueType, Cmp, typename StdFuns::template Alloc<std::pair<const KeyType, ValueType>>> Map;
 	Map m;
 	typedef typename Map::value_type StoreType;
 
