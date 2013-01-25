@@ -23,15 +23,14 @@ class stlmap {
 	public:
 		stlmap() : m() {}
 		StoreType put(StoreType key)     {
-			auto old = m.find(key.first);
-			StoreType oldval;
-			if (old != m.end()) {
-				oldval = *old;
-			} else {
-				oldval = nullptr;
+			auto p = m.insert(key);
+			if(!p.second) {
+				auto r = *p.first;
+				m.erase(p.first);
+				m.insert(key);
+				return r;
 			}
-			m[key.first] = key.second;
-			return oldval;
+			return nullptr;
 		}
 		bool put_new(StoreType key)    {
 			bool r = m.count(key.first);
