@@ -57,14 +57,14 @@ bool dbterm_compare(DbTerm* key1, DbTerm* key2) {
 
 extern "C" KVSet* create_stlset() {
 	typedef KVcompare<DbTerm*, dbterm_compare> C;
-	typedef standard_functions<DbTerm*, C> S;
+	typedef standard_functions<DbTerm*, C, ETSAllocator> S;
 	auto ptr = make_kv_set<stlset, Eterm*, S, DbTerm*, EtermPacker>();
 	return ptr;
 }
 
 extern "C" KVSet* create_stlmap() {
 	typedef KVcompare<Eterm*, eterm_compare, EtermExtractor> KVC;
-	typedef standard_functions<Eterm*, KVC> S;
+	typedef standard_functions<Eterm*, KVC, ETSAllocator> S;
 	//typedef std::pair<Eterm, DbTerm*> KVPair;
 	auto ptr = make_kv_set<stlmap, Eterm*, S, DbTerm*, NullPacker<Eterm*>, DbTermPairPacker, DbTermPairExtractor>();
 	return ptr;
