@@ -26,6 +26,10 @@ enum gi_type get_gi_subtype(Eterm e) {
     else if(!strcmp(name, "testmap")) return TESTMAP;
     else if(!strcmp(name, "stlset")) return STLSET;
     else if(!strcmp(name, "stlmap")) return STLMAP;
+    else if(!strcmp(name, "stlhashset")) return STLUNORDERED_SET;
+    else if(!strcmp(name, "btreeset")) return BTREESET;
+    else if(!strcmp(name, "btreeset4")) return BTREESET4;
+    else if(!strcmp(name, "null")) return NULL_STORAGE;
     else return ERROR_NO_TYPE;
 }
 
@@ -55,6 +59,18 @@ KVSet* gi_create(DbTableGenericInterface* tbl) {
 	    break;
 	case STLMAP:
 	    ds = create_stlmap();
+	    break;
+	case STLUNORDERED_SET:
+	    ds = create_stlunordered_set();
+	    break;
+	case BTREESET:
+	    ds = create_btreeset();
+	    break;
+	case BTREESET4:
+	    ds = create_btreeset4();
+	    break;
+	case NULL_STORAGE:
+	    ds = create_null();
 	    break;
 	case ERROR_NO_TYPE:
 	default:

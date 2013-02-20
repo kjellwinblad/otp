@@ -8,6 +8,10 @@ enum gi_type {
     TESTMAP,
     STLSET,
     STLMAP,
+    STLUNORDERED_SET,
+    BTREESET,
+    BTREESET4,
+    NULL_STORAGE,
     ERROR_NO_TYPE
 };
 
@@ -21,6 +25,10 @@ KVSet* gi_create(struct db_table_generic_interface* tbl);
 KVSet* new_cppset_default(void);
 KVSet* create_stlset(void);
 KVSet* create_stlmap(void);
+KVSet* create_stlunordered_set(void);
+KVSet* create_btreeset(void);
+KVSet* create_btreeset4(void);
+KVSet* create_null(void);
 
 /* commonly used by C-implemented datastructures */
 int compare(Eterm * element, Eterm * key);

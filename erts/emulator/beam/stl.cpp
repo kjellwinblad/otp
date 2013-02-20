@@ -2,6 +2,10 @@
 #include "stl.hpp"
 #include "stlset.hpp"
 #include "stlmap.hpp"
+#include "stlunordered_set.hpp"
+#include "btreeset.hpp"
+#include "btreeset4.hpp"
+#include "null.hpp"
 
 /** @file
  * @brief provide ETS generic_interface backends using STL containers
@@ -10,6 +14,11 @@
 
 #define cmp_rel(A,A_BASE,B,B_BASE) cmp(A,B)
 extern "C" int cmp(Eterm, Eterm);
+
+extern "C" unsigned int make_hash2(Eterm);
+#define MAKE_HASH(term) \
+    ((is_atom(term) ? (atom_tab(atom_val(term))->slot.bucket.hvalue) : \
+      make_hash2(term)) % MAX_HASH)
 
 bool eterm_compare(Eterm* key1, Eterm* key2) {
 	return cmp(*key1, *key2) < 0;
@@ -55,6 +64,16 @@ bool dbterm_compare(DbTerm* key1, DbTerm* key2) {
 }
 
 
+class EtermHasher {
+	public:
+		size_t operator()(DbTerm* term) const {
+			return make_hash2(*EtermExtractor()(term));
+		}
+};
+
+template <typename K, class S, typename V> using EH_stl_unordered_set = stlunordered_set<K, EtermHasher, S, V>;
+
+
 extern "C" KVSet* create_stlset() {
 	typedef KVcompare<DbTerm*, dbterm_compare> C;
 	typedef standard_functions<DbTerm*, C, ETSAllocator> S;
@@ -69,3 +88,32 @@ extern "C" KVSet* create_stlmap() {
 	auto ptr = make_kv_set<stlmap, Eterm*, S, DbTerm*, NullPacker<Eterm*>, DbTermPairPacker, DbTermPairExtractor>();
 	return ptr;
 }
+
+extern "C" KVSet* create_stlunordered_set() {
+	typedef KVcompare<DbTerm*, dbterm_compare> C;
+	typedef standard_functions<DbTerm*, C, ETSAllocator> S;
+	auto ptr = make_kv_set<EH_stl_unordered_set, Eterm*, S, DbTerm*, EtermPacker>();
+	return ptr;
+}
+
+extern "C" KVSet* create_btreeset() {
+	typedef KVcompare<DbTerm*, dbterm_compare> C;
+	typedef standard_functions<DbTerm*, C, ETSAllocator> S;
+	auto ptr = make_kv_set<btreeset, Eterm*, S, DbTerm*, EtermPacker>();
+	return ptr;
+}
+
+extern "C" KVSet* create_btreeset4() {
+	typedef KVcompare<DbTerm*, dbterm_compare> C;
+	typedef standard_functions<DbTerm*, C, ETSAllocator> S;
+	auto ptr = make_kv_set<btreeset4, Eterm*, S, DbTerm*, EtermPacker>();
+	return ptr;
+}
+
+extern "C" KVSet* create_null() {
+	typedef KVcompare<Eterm*, eterm_compare> KVC;
+	typedef standard_functions<Eterm*, KVC, ETSAllocator> S;
+	auto ptr = make_kv_set<null_storage, Eterm*, S>();
+	return ptr;
+}
+
