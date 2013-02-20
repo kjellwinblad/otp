@@ -40,8 +40,9 @@ class stlmap {
 		StoreType remove(KeyType key)  {
 			auto it = m.find(key);
 			if(it != m.end()) {
-				// TODO: return old val??
+				auto old = *it;
 				m.erase(it);
+				return old;
 			}
 			return nullptr;
 		}

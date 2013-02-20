@@ -36,7 +36,9 @@ class stlset {
 		ValueType remove(KeyType key)  {
 			auto it = m.find(key);
 			if(it != m.end()) {
+				auto old = *it;
 				m.erase(it);
+				return old;
 			}
 			return nullptr;
 		}
