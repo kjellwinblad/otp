@@ -12,15 +12,15 @@
 #define SKIPLIST_NUM_OF_LEVELS 30
 
 #define SKIPLIST_NORMAL_NODE 1
-#define SKIPLIST_LEFT_BORDER_NODE 1 << 2
-#define SKIPLIST_RIGHT_BORDER_NODE 1 << 1
+#define SKIPLIST_LEFT_BORDER_NODE 2
+#define SKIPLIST_RIGHT_BORDER_NODE 3
 
 
 typedef struct skiplist_node {
     //contains information about if it is a boarder point
     int info;
-    void *  element;
     int  num_of_levels;
+    void *  element;
     struct skiplist_node * lower_lists[];    
 } SkiplistNode;
 
@@ -81,9 +81,9 @@ int compare(SkiplistNode* skiplist,
             void * key, 
             int (*compare_function)(void *, void *), 
             unsigned int key_offset){
-    if(skiplist->info & SKIPLIST_NORMAL_NODE){
+    if(skiplist->info == SKIPLIST_NORMAL_NODE){
         return compare_function(skiplist->element + key_offset, key);
-    } else if (skiplist->info & SKIPLIST_LEFT_BORDER_NODE){
+    } else if (skiplist->info == SKIPLIST_LEFT_BORDER_NODE){
         return -1;
     } else {
         return 1;
@@ -202,7 +202,7 @@ void skiplist_delete(KVSet* kv_set,
     SkiplistNode* node_temp = head_node->lower_lists[head_node->num_of_levels -1];
     SkiplistNode* node_iter = node_temp;
 
-    while(node_iter->info &  SKIPLIST_NORMAL_NODE){
+    while(node_iter->info ==  SKIPLIST_NORMAL_NODE){
         node_temp = node_iter;
         node_iter = node_iter->lower_lists[node_iter->num_of_levels -1];
         if(NULL != element_free_function){
@@ -336,7 +336,7 @@ void * skiplist_first(KVSet* kv_set){
 
     SkiplistNode * firstCandidate = 
         head_node->lower_lists[head_node->num_of_levels - 1];
-    if(firstCandidate->info & SKIPLIST_RIGHT_BORDER_NODE){
+    if(firstCandidate->info == SKIPLIST_RIGHT_BORDER_NODE){
         return NULL;
     } else {
         return firstCandidate->element;
@@ -357,15 +357,15 @@ void * skiplist_last(KVSet* kv_set){
     for(level = 0; level < SKIPLIST_NUM_OF_LEVELS; level++){
         level_pos = level - (SKIPLIST_NUM_OF_LEVELS - skiplist_iter_prev->num_of_levels);
         skiplist_iter = skiplist_iter_prev->lower_lists[level_pos];
-        while(skiplist_iter->info & 
-              (SKIPLIST_LEFT_BORDER_NODE | SKIPLIST_NORMAL_NODE)) {
+        while(skiplist_iter->info == SKIPLIST_LEFT_BORDER_NODE
+		|| skiplist_iter->info == SKIPLIST_NORMAL_NODE) {
             skiplist_iter_prev = skiplist_iter;
             level_pos = level - ( head_node->num_of_levels - skiplist_iter->num_of_levels);
             skiplist_iter = skiplist_iter->lower_lists[level_pos];
         }
     }
 
-    if(skiplist_iter_prev->info & SKIPLIST_LEFT_BORDER_NODE){
+    if(skiplist_iter_prev->info == SKIPLIST_LEFT_BORDER_NODE){
         return NULL;
     } else {
         return skiplist_iter_prev->element;;
