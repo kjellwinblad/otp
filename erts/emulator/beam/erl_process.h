@@ -385,6 +385,10 @@ struct ErtsRunQueue_ {
 	Port *start;
 	Port *end;
     } ports;
+
+    struct {
+	erts_atomic_t ets;
+    } hazard;
 };
 
 typedef union {

@@ -4481,6 +4481,8 @@ erts_init_scheduling(int no_schedulers, int no_schedulers_online)
 	rq->ports.info.reds = 0;
 	rq->ports.start = NULL;
 	rq->ports.end = NULL;
+
+	erts_atomic_init_mb(&rq->hazard.ets, 0);
     }
 
 #ifdef ERTS_SMP
