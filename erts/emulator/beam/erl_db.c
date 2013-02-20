@@ -210,6 +210,8 @@ static BIF_RETTYPE ets_select1(Process* p, Eterm arg1);
 static BIF_RETTYPE ets_select2(Process* p, Eterm arg1, Eterm arg2);
 static BIF_RETTYPE ets_select3(Process* p, Eterm arg1, Eterm arg2, Eterm arg3);
 
+static void wait_ets_hazards_gone(void* current);
+static void set_ets_hazard(Process* p, void* current);
 
 /* 
  * Exported global
@@ -3872,6 +3874,25 @@ erts_ets_colliding_names(Process* p, Eterm name, Uint cnt)
     return list;
 }
 
+#ifdef ERTS_SMP
+/* this waits for all ets hazards to disappear */
+static void wait_ets_hazards_gone(void* current) {
+    int i;
+    Uint total, online, active;
+    (void) erts_schedulers_state(&total, &online, &active, 0);
+    for(i=0; i<online; i++) {
+	erts_atomic_t* hazardptr = &ERTS_RUNQ_IX(i)->hazard.ets;
+	while(current == (void*) erts_atomic_read_mb(hazardptr)); /* wait for this to change */
+    }
+}
+
+/* this sets the hazard pointer to the requested value */
+static void set_ets_hazard(Process* p, void* current) {
+    erts_atomic_t* hazardptr = &p->run_queue->hazard.ets;
+    erts_atomic_set_mb(hazardptr, (erts_aint_t) current);
+}
+
+#endif
 
 #ifdef HARDDEBUG   /* Here comes some debug functions */
 
