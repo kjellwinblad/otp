@@ -210,8 +210,10 @@ static BIF_RETTYPE ets_select1(Process* p, Eterm arg1);
 static BIF_RETTYPE ets_select2(Process* p, Eterm arg1, Eterm arg2);
 static BIF_RETTYPE ets_select3(Process* p, Eterm arg1, Eterm arg2, Eterm arg3);
 
+#ifdef ERTS_SMP
 static void wait_ets_hazards_gone(void* current);
 static void set_ets_hazard(Process* p, void* current);
+#endif
 
 /* 
  * Exported global
