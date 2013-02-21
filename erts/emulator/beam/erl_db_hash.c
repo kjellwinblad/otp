@@ -596,10 +596,11 @@ static void restore_fixdel(DbTableHash* tb, FixedDeletion* fixdel)
 void db_unfix_table_hash(DbTableHash *tb)
 {
     FixedDeletion* fixdel;
-
+/* TODO FIXME
     ERTS_SMP_LC_ASSERT(erts_smp_lc_rwmtx_is_rwlocked(&tb->common.rwlock)
 		       || (erts_smp_lc_rwmtx_is_rlocked(&tb->common.rwlock)
 			   && !tb->common.is_thread_safe));
+*/
 restart:
     fixdel = (FixedDeletion*) erts_smp_atomic_xchg_acqb(&tb->fixdel,
 							(erts_aint_t) NULL);

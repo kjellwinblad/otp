@@ -211,9 +211,10 @@ typedef struct db_fixation {
 typedef struct db_table_common {
     erts_refc_t ref;          /* fixation counter and delete counter */
 #ifdef ERTS_SMP
-    erts_smp_rwmtx_t rwlock;  /* rw lock on table */
+//    erts_smp_rwmtx_t rwlock;  /* rw lock on table */
     erts_smp_mtx_t fixlock;   /* Protects fixations,megasec,sec,microsec */
     int is_thread_safe;       /* No fine locking inside table needed */
+    erts_smp_atomic_t exclusive; /* indicator for an ongoing exclusive access */
     Uint32 type;              /* table type, *read only* after creation */
 #endif
     Eterm owner;              /* Pid of the creator */
