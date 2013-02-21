@@ -111,7 +111,8 @@ static struct {
 #define IS_SLOT_ALIVE(i) (!(GET_TAB_NEXT_FREE(i) & (1|2)))
 #define GET_NEXT_FREE_SLOT(i) (GET_TAB_NEXT_FREE(i) >> 2)
 #define SET_NEXT_FREE_SLOT(i,next) (erts_atomic_set_mb(&meta_main_tab[(i)].u.next_free, ((next)<<2)|1))
-#define MARK_SLOT_DEAD(i) (erts_atomic_read_bor_mb(&meta_main_tab[(i)].u.next_free, 2))
+//Returns non 0 value if it is already marked as dead
+#define MARK_SLOT_DEAD(i) ((2 & erts_atomic_read_bor_mb(&meta_main_tab[(i)].u.next_free, 2)))
 #define GET_ANY_SLOT_TAB(i) ((DbTable*)(GET_TAB_NEXT_FREE(i) & ~(1|2))) /* dead or alive */
 
 //lock_free_meta
@@ -225,7 +226,7 @@ static BIF_RETTYPE ets_select2(Process* p, Eterm arg1, Eterm arg2);
 static BIF_RETTYPE ets_select3(Process* p, Eterm arg1, Eterm arg2, Eterm arg3);
 
 #ifdef ERTS_SMP
-static void wait_ets_hazards_gone(void* current);
+static void wait_ets_hazards_gone(Process* self, void* current);
 static void set_ets_hazard(Process* p, void* current);
 #endif
 
@@ -431,6 +432,10 @@ DbTable* db_get_table_aux(Process *p,
 	    tb = GET_TAB_TABLE(slot);
 #ifdef ERTS_SMP
 	    set_ets_hazard(p, tb);
+            if(IS_SLOT_DEAD(slot)){
+                set_ets_hazard(p, NULL);
+                tb = NULL;
+            }
 #endif
 	}
     }
@@ -664,8 +669,8 @@ BIF_RETTYPE ets_safe_fixtable_2(BIF_ALIST_2)
     kind = (BIF_ARG_2 == am_true) ? LCK_READ : LCK_WRITE_REC; 
 
     if ((tb = db_get_table(BIF_P, BIF_ARG_1, DB_READ, kind)) == NULL) {
-	    BIF_ERROR(BIF_P, BADARG);
-	}
+        BIF_ERROR(BIF_P, BADARG);
+    }
 
     if (BIF_ARG_2 == am_true) {
 	fix_table_locked(BIF_P, tb);
@@ -1683,6 +1688,7 @@ BIF_RETTYPE ets_delete_1(BIF_ALIST_1)
 {
     int trap;
     DbTable* tb;
+    erts_aint_t slot_dead_already;
     //lock_free_meta
     //erts_smp_rwmtx_t *mmtl;
 
@@ -1743,8 +1749,20 @@ BIF_RETTYPE ets_delete_1(BIF_ALIST_1)
 //	db_lock(tb, LCK_WRITE);
 //    }
 //#endif
+
     /* We must keep the slot, to be found by db_proc_dead() if process dies */
-    MARK_SLOT_DEAD(tb->common.slot);
+    slot_dead_already = MARK_SLOT_DEAD(tb->common.slot);
+
+    if(slot_dead_already){
+        BIF_ERROR(BIF_P, BADARG);
+    }
+
+#ifdef ERTS_SMP
+
+    wait_ets_hazards_gone(BIF_P, tb);
+
+#endif
+
     //lock_free_meta
     //erts_smp_rwmtx_rwunlock(mmtl);
     if (is_atom(tb->common.id))
@@ -2120,7 +2138,7 @@ BIF_RETTYPE ets_all_0(BIF_ALIST_0)
     previous = NIL;
     j = 0;
     for(i = 0; (i < t_max_tabs && j < t_tabs_cnt); i++) {
-	//lock_free_meta
+	//lock_free_meta TODO this might not be safe
         //erts_smp_rwmtx_t *mmtl = get_meta_main_tab_lock(i);
 	//erts_smp_rwmtx_rlock(mmtl);
 	if (IS_SLOT_ALIVE(i)) {
@@ -3917,16 +3935,22 @@ erts_ets_colliding_names(Process* p, Eterm name, Uint cnt)
 }
 
 #ifdef ERTS_SMP
-/* this waits for all ets hazards to disappear */
-static void wait_ets_hazards_gone(void* current) {
+
+ /* this waits for all ets hazards to disappear */
+static void wait_ets_hazards_gone(Process* self, void* current) {
     int i;
     Uint total, online, active;
     (void) erts_schedulers_state(&total, &online, &active, 0);
+    erts_atomic_t* own = &self->run_queue->hazard.ets;
     for(i=0; i<online; i++) {
-	erts_atomic_t* hazardptr = &ERTS_RUNQ_IX(i)->hazard.ets;
-	while(current == (void*) erts_atomic_read_mb(hazardptr)); /* wait for this to change */
-    }
+        erts_atomic_t* hazardptr = &ERTS_RUNQ_IX(i)->hazard.ets;
+        if(hazardptr == own) continue; /* TODO: maybe optimize to compare run_queue instead of hazard.ets */
+        while(current == (void*) erts_atomic_read_mb(hazardptr)); /* wait for this to change */
+    }    
 }
+
+
+
 
 /* this sets the hazard pointer to the requested value */
 static void set_ets_hazard(Process* p, void* current) {
