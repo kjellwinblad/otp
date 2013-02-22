@@ -325,6 +325,7 @@ static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {
 }
 
 static ERTS_INLINE void db_shared_lock(Process* self, DbTable* tb) {
+    set_ets_hazard(self, tb);
     /* TODO mb or other barrier? */
     for(;;) {
 	if (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL) {
@@ -429,7 +430,6 @@ DbTable* db_get_table_aux(Process *p,
 {
     DbTable *tb = NULL;
     erts_smp_rwmtx_t *mtl = NULL;
-
     /*
      * IMPORTANT: Only scheduler threads are allowed
      *            to access tables. Memory management
@@ -453,12 +453,12 @@ DbTable* db_get_table_aux(Process *p,
 #endif
 	if (slot < db_max_tabs && IS_SLOT_ALIVE(slot)) {
 	    tb = GET_TAB_TABLE(slot);
+	    db_lock(p, tb, kind);
 #ifdef ERTS_SMP
-	    set_ets_hazard(p, tb);
-            if(IS_SLOT_DEAD(slot)){
-                set_ets_hazard(p, NULL);
-                tb = NULL;
-            }
+	    if(IS_SLOT_DEAD(slot)){
+		set_ets_hazard(p, NULL);
+		tb = NULL;
+	    }
 #endif
 	}
     }
@@ -488,9 +488,14 @@ DbTable* db_get_table_aux(Process *p,
 		}
 	    }
 	}
+	if (tb) {
+	    db_lock(p, tb, kind);
+#ifdef ERTS_SMP
+	    /* no death checking required here as long as named tables still use rwlocks */
+#endif
+	}
     }
     if (tb) {
-	db_lock(p, tb, kind);
 	if (tb->common.id != id
 	    || ((tb->common.status & what) == 0 && p->id != tb->common.owner)) {
 	    db_unlock(p, tb, kind);
@@ -3969,8 +3974,8 @@ erts_ets_colliding_names(Process* p, Eterm name, Uint cnt)
 static void wait_ets_hazards_gone(Process* self, void* current) {
     int i;
     Uint total, online, active;
-    (void) erts_schedulers_state(&total, &online, &active, 0);
     erts_atomic_t* own = &self->run_queue->hazard.ets;
+    (void) erts_schedulers_state(&total, &online, &active, 0);
     for(i=0; i<online; i++) {
 	erts_atomic_t* hazardptr = &ERTS_RUNQ_IX(i)->hazard.ets;
 	if(hazardptr == own) continue; /* TODO: maybe optimize to compare run_queue instead of hazard.ets */
