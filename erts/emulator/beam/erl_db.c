@@ -317,12 +317,11 @@ static ERTS_INLINE void db_init_lock(DbTable* tb, int use_frequent_read_lock,
 #ifdef ERTS_SMP
 static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {
     /* TODO mb or other barrier? */
-    erts_aint_t is_exclusive;
+    erts_aint_t previous_value;
     for(;;) { /* spin on other exclusive access */
-	is_exclusive = erts_smp_atomic_cmpxchg_mb(&tb->common.exclusive, (erts_aint_t)self, (erts_aint_t)NULL);
-	if (is_exclusive != (erts_aint_t)NULL) {
-	    while (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL); /* spin on exclusive access */
-	} else {
+	while (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL); /* spin on exclusive access */
+        previous_value = erts_smp_atomic_cmpxchg_mb(&tb->common.exclusive, (erts_aint_t)self, (erts_aint_t)NULL);
+	if (previous_value == (erts_aint_t)NULL) {
 	    break;
 	}
     }
@@ -1288,7 +1287,7 @@ BIF_RETTYPE ets_rename_2(BIF_ALIST_2)
 
     if (is_small(BIF_ARG_1)) {
 	Uint slot = unsigned_val(BIF_ARG_1) & meta_main_tab_slot_mask;
-	//lock_free_meta
+	//lock_free_meta TODO this will not work if table is not named
         //lck2 = get_meta_main_tab_lock(slot);
     }
     else if (is_atom(BIF_ARG_1)) {
@@ -1720,7 +1719,6 @@ BIF_RETTYPE ets_delete_1(BIF_ALIST_1)
 {
     int trap;
     DbTable* tb;
-    erts_aint_t slot_dead_already;
     //lock_free_meta
     //erts_smp_rwmtx_t *mmtl;
 
