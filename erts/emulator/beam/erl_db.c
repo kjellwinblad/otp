@@ -318,9 +318,14 @@ static ERTS_INLINE void db_init_lock(DbTable* tb, int use_frequent_read_lock,
 static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {
     /* TODO mb or other barrier? */
     erts_aint_t is_exclusive;
-    do { /* spin on other exclusive access */
+    for(;;) { /* spin on other exclusive access */
 	is_exclusive = erts_smp_atomic_cmpxchg_mb(&tb->common.exclusive, (erts_aint_t)self, (erts_aint_t)NULL);
-    } while (is_exclusive != (erts_aint_t)NULL);
+	if (is_exclusive != (erts_aint_t)NULL) {
+	    while (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL); /* spin on exclusive access */
+	} else {
+	    break;
+	}
+    }
     wait_ets_hazards_gone(self, tb);
 }
 
@@ -389,6 +394,7 @@ static ERTS_INLINE void db_unlock(Process* self, DbTable* tb, db_lock_kind_t kin
 	    db_exclusive_unlock(tb);
 	}
 	else {
+    	    set_ets_hazard(self, NULL);
 	    ASSERT(!tb->common.is_thread_safe);
 	}
     }
@@ -400,10 +406,9 @@ static ERTS_INLINE void db_unlock(Process* self, DbTable* tb, db_lock_kind_t kin
 	    db_exclusive_unlock(tb);
 	    break;
 	default:
-	    {}
+    	    set_ets_hazard(self, NULL);
 	}
     }
-    set_ets_hazard(self, NULL);
 #endif
 }
 
@@ -3974,11 +3979,12 @@ erts_ets_colliding_names(Process* p, Eterm name, Uint cnt)
 static void wait_ets_hazards_gone(Process* self, void* current) {
     int i;
     Uint total, online, active;
-    erts_atomic_t* own = &self->run_queue->hazard.ets;
+    ErtsRunQueue* own = self->run_queue;
     (void) erts_schedulers_state(&total, &online, &active, 0);
     for(i=0; i<online; i++) {
-	erts_atomic_t* hazardptr = &ERTS_RUNQ_IX(i)->hazard.ets;
-	if(hazardptr == own) continue; /* TODO: maybe optimize to compare run_queue instead of hazard.ets */
+	ErtsRunQueue* q = ERTS_RUNQ_IX(i);
+	if(q == own) continue; /* TODO: maybe optimize to compare run_queue instead of hazard.ets */
+	erts_atomic_t* hazardptr = &q->hazard.ets;
 	while(current == (void*) erts_atomic_read_mb(hazardptr)); /* wait for this to change */
     }
 }
