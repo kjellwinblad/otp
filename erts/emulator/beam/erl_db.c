@@ -1268,8 +1268,7 @@ BIF_RETTYPE ets_rename_2(BIF_ALIST_2)
     (void) meta_name_tab_bucket(BIF_ARG_2, &lck1);
 
     if (is_small(BIF_ARG_1)) {
-        //lock_free_meta
-	//Uint slot = unsigned_val(BIF_ARG_1) & meta_main_tab_slot_mask;
+	Uint slot = unsigned_val(BIF_ARG_1) & meta_main_tab_slot_mask;
 	//lock_free_meta
         //lck2 = get_meta_main_tab_lock(slot);
     }
@@ -1753,7 +1752,7 @@ BIF_RETTYPE ets_delete_1(BIF_ALIST_1)
 	db_meta_unlock(meta_pid_to_tab, LCK_WRITE_REC);
 	UnUseTmpHeap(3,BIF_P);
     }    
-    //lock_free_meta TODO NEED TO FIX THIS TO MAKE DELETE CORRECT
+    //lock_free_meta
     //mmtl = get_meta_main_tab_lock(tb->common.slot);
 //lock_free_meta
 //#ifdef ERTS_SMP
@@ -1769,17 +1768,7 @@ BIF_RETTYPE ets_delete_1(BIF_ALIST_1)
 //#endif
 
     /* We must keep the slot, to be found by db_proc_dead() if process dies */
-    slot_dead_already = MARK_SLOT_DEAD(tb->common.slot);
-
-    if(slot_dead_already){
-        BIF_ERROR(BIF_P, BADARG);
-    }
-
-#ifdef ERTS_SMP
-
-    wait_ets_hazards_gone(BIF_P, tb);
-
-#endif
+    MARK_SLOT_DEAD(tb->common.slot);
 
     //lock_free_meta
     //erts_smp_rwmtx_rwunlock(mmtl);
