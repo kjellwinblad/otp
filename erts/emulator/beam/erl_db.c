@@ -315,11 +315,32 @@ static ERTS_INLINE void db_init_lock(DbTable* tb, int use_frequent_read_lock,
 }
 
 #ifdef ERTS_SMP
+
+#define BACKOFF_BASE 250
+#define BACKOFF_FACTOR 2
+#define BACKOFF_CAP 500
+
+
+static ERTS_INLINE int min(int a, int b){
+    if(a < b){
+        return a;
+    }else{
+        return b;
+    }
+}
+
 static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {
+    
+    int i;
+    int backoff_time = BACKOFF_BASE;
+
     /* TODO mb or other barrier? */
     erts_aint_t previous_value;
     for(;;) { /* spin on other exclusive access */
-	while (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL); /* spin on exclusive access */
+	while (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL){ /* spin on exclusive access */
+            for(i = backoff_time; i > 0; i--){}
+            backoff_time = min(backoff_time * BACKOFF_FACTOR, BACKOFF_CAP);
+        }
         previous_value = erts_smp_atomic_cmpxchg_mb(&tb->common.exclusive, (erts_aint_t)self, (erts_aint_t)NULL);
 	if (previous_value == (erts_aint_t)NULL) {
 	    break;
