@@ -40,6 +40,7 @@
 #include "error.h"
 #define ERTS_WANT_DB_INTERNAL__
 #include "erl_db.h"
+#include "erl_db_generic_interface.h"
 #include "bif.h"
 #include "big.h"
 
@@ -188,6 +189,7 @@ typedef enum {
 } db_lock_kind_t;
 
 extern DbTableMethod db_hash;
+extern DbTableMethod db_generic_interface;
 extern DbTableMethod db_tree;
 
 int user_requested_db_max_tabs;
@@ -1336,6 +1338,8 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
     Eterm val;
     Eterm ret;
     Eterm heir;
+    enum gi_type gi_type_setting = ERROR_NO_TYPE;
+    struct gi_options_list* options_list = NULL;
     UWord heir_data;
     Uint32 status;
     Sint keypos;
@@ -1374,15 +1378,19 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 	val = CAR(list_val(list));
 	if (val == am_bag) {
 	    status |= DB_BAG;
-	    status &= ~(DB_SET | DB_DUPLICATE_BAG | DB_ORDERED_SET);
+	    status &= ~(DB_SET | DB_DUPLICATE_BAG | DB_ORDERED_SET | DB_GENERIC_INTERFACE);
 	}
 	else if (val == am_duplicate_bag) {
 	    status |= DB_DUPLICATE_BAG;
-	    status &= ~(DB_SET | DB_BAG | DB_ORDERED_SET);
+	    status &= ~(DB_SET | DB_BAG | DB_ORDERED_SET | DB_GENERIC_INTERFACE);
 	}
 	else if (val == am_ordered_set) {
 	    status |= DB_ORDERED_SET;
-	    status &= ~(DB_SET | DB_BAG | DB_DUPLICATE_BAG);
+	    status &= ~(DB_SET | DB_BAG | DB_DUPLICATE_BAG | DB_GENERIC_INTERFACE);
+	}
+	else if (val == am_generic_interface) {
+	    status |= DB_GENERIC_INTERFACE;
+	    status &= ~(DB_SET | DB_BAG | DB_DUPLICATE_BAG | DB_ORDERED_SET);
 	}
 	/*TT*/
 	else if (is_tuple(val)) {
@@ -1418,6 +1426,43 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 		    }
 #endif
 		    
+		}
+		else if (tp[1] == am_gi_type) {
+			gi_type_setting = get_gi_subtype(tp[2]);
+		}
+		else if (tp[1] == am_gi_options) {
+		    Eterm gi_list = tp[2];
+		    struct gi_options_list** current = &options_list;
+		    while(is_list(gi_list)) {
+			struct gi_option option;
+			Eterm gi_val = CAR(list_val(gi_list));
+			if(is_tuple(gi_val)) {
+			    Eterm *gi_tp = tuple_val(gi_val);
+			    if(arityval(gi_tp[0]) == 2) {
+				if(is_atom(gi_tp[1]) && is_atom(gi_tp[2])) {
+				    option.type = ATOM;
+				    option.first.name = atom_name(gi_tp[1]);
+				    option.second.name = atom_name(gi_tp[2]);
+				} else if(is_atom(gi_tp[1]) && is_small(gi_tp[2])) {
+				    option.type = INTEGER;
+				    option.first.name =  atom_name(gi_tp[1]);
+				    option.second.number = signed_val(gi_tp[2]);
+				} else break;
+			    } else break;
+			} else if(is_atom(gi_val)) {
+			    option.type = SETTING;
+			    option.first.name = atom_name(gi_val);
+			    option.second.name = NULL;
+			} else break;
+			*current = (struct gi_options_list*) malloc(sizeof(struct gi_options_list));
+			(*current)->option = option;
+			(*current)->next = NULL;
+			current = &((*current)->next);
+			gi_list = CDR(list_val(gi_list));
+		    }
+		    if (is_not_nil(gi_list)) { /* bad opt or not a well formed list */
+			break; /* go to normal error handling */
+		    }
 		}
 		else if (tp[1] == am_heir && tp[2] == am_none) {
 		    heir = am_none;
@@ -1466,6 +1511,9 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
     else if (IS_TREE_TABLE(status)) {
 	meth = &db_tree;
     }
+    else if (IS_GENERIC_INTERFACE_TABLE(status)) {
+	meth = &db_generic_interface;
+    }
     else {
 	BIF_ERROR(BIF_P, BADARG);
     }
@@ -1508,10 +1556,16 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
     tb->common.fixations = NULL;
     tb->common.compress = is_compressed;
 
+    if (IS_GENERIC_INTERFACE_TABLE(tb->common.status)) {
+	((DbTableGenericInterface*) tb)->options = options_list;
+	((DbTableGenericInterface*) tb)->type = gi_type_setting;
+    }
+    
 #ifdef DEBUG
     cret = 
 #endif
 	meth->db_create(BIF_P, tb);
+
     ASSERT(cret == DB_ERROR_NONE);
 
     erts_smp_spin_lock(&meta_main_tab_main_lock);
@@ -2941,6 +2995,7 @@ void init_db(void)
     }
 
     db_initialize_hash();
+    db_initialize_generic_interface();
     db_initialize_tree();
 
     /*TT*/
@@ -3712,7 +3767,6 @@ static int free_table_cont(Process *p,
 static Eterm table_info(Process* p, DbTable* tb, Eterm What)
 {
     Eterm ret = THE_NON_VALUE;
-
     if (What == am_size) {
 	ret = make_small(erts_smp_atomic_read_nob(&tb->common.nitems));
     } else if (What == am_type) {
@@ -3722,6 +3776,8 @@ static Eterm table_info(Process* p, DbTable* tb, Eterm What)
 	    ret = am_duplicate_bag;
 	} else if (tb->common.status & DB_ORDERED_SET) {
 	    ret = am_ordered_set;
+	} else if (tb->common.status & DB_GENERIC_INTERFACE) {
+	    ret = am_generic_interface;
 	} else { /*TT*/
 	    ASSERT(tb->common.status & DB_BAG);
 	    ret = am_bag;

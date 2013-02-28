@@ -187,6 +187,7 @@ ERTS_ENABLE_KERNEL_POLL=@ERTS_ENABLE_KERNEL_POLL@
 #
 SHELL   = /bin/sh
 CC      = @CC@
+CPP     = g++
 ifeq ($(TARGET),win32)
 ifeq ($(TYPE),debug)
 EMU_CC  = @CC@
@@ -200,7 +201,7 @@ endif
 WFLAGS  = @WFLAGS@
 CFLAGS  = @STATIC_CFLAGS@ $(TYPE_FLAGS) $(FLAVOR_FLAGS) $(DEFS) $(WFLAGS) $(THR_DEFS) $(ARCHCFLAGS) $(GIT_VSN)
 HCC     = @HCC@
-LD      = @LD@
+LD      = g++
 DEXPORT = @DEXPORT@
 RANLIB  = @RANLIB@
 STRIP   = strip
@@ -637,6 +638,9 @@ endif
 $(OBJDIR)/%.o: beam/%.c
 	$(V_CC) $(subst -O2, $(GEN_OPT_FLGS), $(CFLAGS)) $(INCLUDES) -c $< -o $@
 
+$(OBJDIR)/%.o: beam/%.cpp
+	$(CPP) $(subst -O2, $(GEN_OPT_FLGS), $(CFLAGS)) $(INCLUDES) --std=c++11 -c $< -o $@
+
 $(OBJDIR)/%.o: $(TARGET)/%.c
 	$(V_CC) $(CFLAGS) $(INCLUDES) -Idrivers/common -c $< -o $@
 
@@ -740,7 +744,13 @@ RUN_OBJS = \
 	$(OBJDIR)/erl_zlib.o		$(OBJDIR)/erl_nif.o \
 	$(OBJDIR)/erl_bif_binary.o      $(OBJDIR)/erl_ao_firstfit_alloc.o \
 	$(OBJDIR)/erl_thr_queue.o	$(OBJDIR)/erl_sched_spec_pre_alloc.o \
-	$(OBJDIR)/erl_ptab.o
+	$(OBJDIR)/erl_ptab.o \
+	$(OBJDIR)/erl_db_generic_interface.o \
+	$(OBJDIR)/erl_db_generic_interface_ds.o \
+	$(OBJDIR)/kvset.o \
+	$(OBJDIR)/skiplist.o \
+	$(OBJDIR)/stl.o \
+	$(OBJDIR)/testmap.o
 
 ifeq ($(TARGET),win32)
 DRV_OBJS = \

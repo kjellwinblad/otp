@@ -1,0 +1,32 @@
+#include "kvset.hpp"
+#include "testmap.hpp"
+
+/** @file
+ * @brief provide C interface to testmap
+ * @note this has to be compiled using a C++ compiler, but functions are to be used in C
+ */
+
+extern "C" {
+
+#define cmp_rel(A,A_BASE,B,B_BASE) cmp(A,B)
+int cmp(Eterm, Eterm);
+
+bool testcompare(DbTerm* key1, DbTerm* key2) {
+	auto a = key1->tpl[1];
+	auto b = key2->tpl[1];
+	return cmp(a, b) < 0;
+/*    return cmp_rel(*key2,
+                   key2,
+                   *key1, 
+                   key1);
+		   */
+}
+
+KVSet* new_cppset_default() {
+	typedef KVcompare<DbTerm*, testcompare> C;
+	typedef standard_functions<DbTerm*, C> S;
+	auto ptr = make_kv_set<testmap, DbTerm*, S>();
+	return ptr;
+}
+
+} /* extern "C" */
