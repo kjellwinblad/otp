@@ -315,17 +315,30 @@ static ERTS_INLINE void db_init_lock(DbTable* tb, int use_frequent_read_lock,
 }
 
 #ifdef ERTS_SMP
+
 static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {
-    /* TODO mb or other barrier? */
-    erts_aint_t previous_value;
-    for(;;) { /* spin on other exclusive access */
-	while (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL); /* spin on exclusive access */
-        previous_value = erts_smp_atomic_cmpxchg_mb(&tb->common.exclusive, (erts_aint_t)self, (erts_aint_t)NULL);
-	if (previous_value == (erts_aint_t)NULL) {
-	    break;
-	}
+    
+    MCSQNodeETS* mcs_qnode_ptr = &self->run_queue->mcs_qnode_ets;
+
+    erts_atomic_t* mcs_qnode_waiting_ptr = &mcs_qnode_ptr->waiting;
+
+    erts_atomic_t* mcs_qnode_next_ptr = &mcs_qnode_ptr->next;
+
+    MCSQNodeETS* pred;
+
+    erts_atomic_set_mb(mcs_qnode_next_ptr, (erts_aint_t) NULL);
+
+    pred = (MCSQNodeETS*)erts_atomic_xchg_mb(&tb->common.exclusive,
+                                               mcs_qnode_ptr);
+
+    if(pred != NULL){
+        erts_atomic_set_mb(mcs_qnode_waiting_ptr, 1);
+        erts_atomic_set_mb(&pred->next, mcs_qnode_ptr);
+        while(erts_smp_atomic_read_mb(mcs_qnode_waiting_ptr));
     }
+
     wait_ets_hazards_gone(self, tb);
+    
 }
 
 static ERTS_INLINE void db_shared_lock(Process* self, DbTable* tb) {
@@ -342,9 +355,37 @@ static ERTS_INLINE void db_shared_lock(Process* self, DbTable* tb) {
     }
 }
 
-static ERTS_INLINE void db_exclusive_unlock(DbTable* tb) {
+static ERTS_INLINE void db_exclusive_unlock(Process* self, DbTable* tb) {
     /* TODO mb or other barrier? */
-    erts_smp_atomic_set_mb(&tb->common.exclusive, (erts_aint_t)NULL);
+
+    MCSQNodeETS* previous_value;
+
+    MCSQNodeETS* mcs_qnode_ptr = &self->run_queue->mcs_qnode_ets;
+
+    MCSQNodeETS* successor = erts_smp_atomic_read_mb(&mcs_qnode_ptr->next);
+
+    if(successor == NULL){
+
+        previous_value = 
+            (MCSQNodeETS*)erts_smp_atomic_cmpxchg_mb(&tb->common.exclusive, 
+                                                     NULL,
+                                                     mcs_qnode_ptr);
+
+        if(previous_value != mcs_qnode_ptr){
+
+            do{
+
+                successor =  (MCSQNodeETS*)erts_smp_atomic_read_mb(&mcs_qnode_ptr->next);
+
+            }while(successor == NULL);
+
+            erts_atomic_set_mb(&successor->waiting, 0);
+        }
+
+    }else{
+        erts_atomic_set_mb(&successor->waiting, 0);
+    }
+
 }
 #endif
 
@@ -390,7 +431,7 @@ static ERTS_INLINE void db_unlock(Process* self, DbTable* tb, db_lock_kind_t kin
 	if (kind == LCK_WRITE) {
 	    ASSERT(tb->common.is_thread_safe);
 	    tb->common.is_thread_safe = 0;
-	    db_exclusive_unlock(tb);
+	    db_exclusive_unlock(self, tb);
 	}
 	else {
     	    set_ets_hazard(self, NULL);
@@ -402,7 +443,7 @@ static ERTS_INLINE void db_unlock(Process* self, DbTable* tb, db_lock_kind_t kin
 	switch (kind) {
 	case LCK_WRITE:
 	case LCK_WRITE_REC:
-	    db_exclusive_unlock(tb);
+	    db_exclusive_unlock(self, tb);
 	    break;
 	default:
     	    set_ets_hazard(self, NULL);

@@ -324,6 +324,11 @@ typedef struct {
     } migrate;
 } ErtsRunQueueInfo;
 
+typedef struct {
+    erts_atomic_t waiting;
+    erts_atomic_t next;
+} MCSQNodeETS;
+
 struct ErtsRunQueue_ {
     int ix;
     erts_smp_atomic32_t info_flags;
@@ -373,6 +378,9 @@ struct ErtsRunQueue_ {
     struct {
 	erts_atomic_t ets;
     } hazard;
+
+    MCSQNodeETS mcs_qnode_ets;
+
 };
 
 typedef union {
