@@ -316,21 +316,17 @@ static ERTS_INLINE void db_init_lock(DbTable* tb, int use_frequent_read_lock,
 
 #ifdef ERTS_SMP
 
-static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {
-    
+static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {  
     MCSQNodeETS* mcs_qnode_ptr = &self->run_queue->mcs_qnode_ets;
-
     erts_atomic_t* mcs_qnode_waiting_ptr = &mcs_qnode_ptr->waiting;
-
     erts_atomic_t* mcs_qnode_next_ptr = &mcs_qnode_ptr->next;
-
     MCSQNodeETS* pred;
 
-    erts_atomic_set_mb(mcs_qnode_next_ptr, (erts_aint_t) NULL);
+    erts_atomic_set_ddrb(mcs_qnode_next_ptr,
+                            NULL);
 
     pred = (MCSQNodeETS*)erts_atomic_xchg_mb(&tb->common.exclusive,
                                                mcs_qnode_ptr);
-
     if(pred != NULL){
         erts_atomic_set_mb(mcs_qnode_waiting_ptr, 1);
         erts_atomic_set_mb(&pred->next, mcs_qnode_ptr);
@@ -338,7 +334,6 @@ static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {
     }
 
     wait_ets_hazards_gone(self, tb);
-    
 }
 
 static ERTS_INLINE void db_shared_lock(Process* self, DbTable* tb) {
@@ -357,35 +352,24 @@ static ERTS_INLINE void db_shared_lock(Process* self, DbTable* tb) {
 
 static ERTS_INLINE void db_exclusive_unlock(Process* self, DbTable* tb) {
     /* TODO mb or other barrier? */
-
     MCSQNodeETS* previous_value;
-
     MCSQNodeETS* mcs_qnode_ptr = &self->run_queue->mcs_qnode_ets;
 
     MCSQNodeETS* successor = erts_smp_atomic_read_mb(&mcs_qnode_ptr->next);
-
     if(successor == NULL){
-
         previous_value = 
             (MCSQNodeETS*)erts_smp_atomic_cmpxchg_mb(&tb->common.exclusive, 
                                                      NULL,
                                                      mcs_qnode_ptr);
-
         if(previous_value != mcs_qnode_ptr){
-
             do{
-
                 successor =  (MCSQNodeETS*)erts_smp_atomic_read_mb(&mcs_qnode_ptr->next);
-
             }while(successor == NULL);
-
             erts_atomic_set_mb(&successor->waiting, 0);
         }
-
     }else{
         erts_atomic_set_mb(&successor->waiting, 0);
     }
-
 }
 #endif
 

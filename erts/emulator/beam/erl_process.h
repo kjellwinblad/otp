@@ -374,13 +374,12 @@ struct ErtsRunQueue_ {
 	struct port *start;
 	struct port *end;
     } ports;
-
     struct {
 	erts_atomic_t ets;
     } hazard;
-
+    __attribute__((align(128)))
     MCSQNodeETS mcs_qnode_ets;
-
+    __attribute__((align(128)))
 };
 
 typedef union {
