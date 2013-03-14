@@ -52,6 +52,13 @@
 				     is broken.*/
 #define DB_ERROR_UNSPEC   -10    /* Unspecified error */
 
+/*
+ * These values are used to specify the behaviour of the put BIF.
+ */
+#define DB_PUT_NORMAL 0 /* locking allowed, do full insert */
+#define DB_PUT_KEYCLASH_CHECK 1 /* locking required, do key clash check */
+#define DB_PUT_DELAYED 2 /* NO locking, insert may be delayed */
+
 /*#define DEBUG_CLONE*/
 
 /*

@@ -46,6 +46,17 @@ void acquire_newlock(erts_atomic_t* L, newlock_node* I) {
     }
 }
 
+int try_newlock(erts_atomic_t* L, newlock_node* I) {
+    newlock_node* pred;
+    erts_atomic_set_nob(&I->next, (erts_aint_t) NULL);
+    pred = (newlock_node*)erts_atomic_cmpxchg_mb(L, (erts_aint_t) I, (erts_aint_t) NULL);
+    return pred == NULL;
+}
+
+int is_free_newlock(erts_atomic_t* L) {
+    return erts_atomic_read_mb(L) == (erts_aint_t) NULL;
+}
+
 void release_newlock(erts_atomic_t* L, newlock_node* I) {
     newlock_node* next = (newlock_node*)erts_atomic_read_mb(&I->next);
     if(next == NULL) {

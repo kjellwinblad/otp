@@ -312,18 +312,15 @@ static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {
 
 static ERTS_INLINE void db_shared_lock(Process* self, DbTable* tb) {
     set_ets_reader(self, tb);
-    /* TODO mb or other barrier? */
-    for(;;) {
-	if (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL) {
-	    set_ets_reader(self, NULL);
-	    /* while (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL); // disabled, promote to exclusive lock instead */ /* spin on exclusive access */
-	    newlock_node* mynode = get_locknode(self);
-	    acquire_newlock(&tb->common.exclusive, mynode);
-	    set_ets_reader(self, tb);
-	    release_newlock(&tb->common.exclusive, mynode);
-	} else {
-	    return;
-	}
+    /* Check for no exclusive access ongoing, promote to exclusive lock if it is.
+     * This provides starvation freedom for the reader.
+     */
+    if (!is_free_newlock(&tb->common.exclusive))  {
+	set_ets_reader(self, NULL);
+	newlock_node* mynode = get_locknode(self);
+	acquire_newlock(&tb->common.exclusive, mynode);
+	set_ets_reader(self, tb);
+	release_newlock(&tb->common.exclusive, mynode);
     }
 }
 
@@ -331,6 +328,20 @@ static ERTS_INLINE void db_exclusive_unlock(Process* self, DbTable* tb) {
     newlock_node* mynode = get_locknode(self);
     release_newlock(&tb->common.exclusive, mynode);
 }
+
+#define EXCLUSIVELY_LOCKED 1
+#define EXCLUSIVE_IS_BUSY 0
+
+static ERTS_INLINE int db_try_exclusive_lock(Process* self, DbTable* tb) {
+    newlock_node* mynode = get_locknode(self);
+    if(try_newlock(&tb->common.exclusive, mynode)) {
+	wait_ets_readers_gone(self, tb);
+	return EXCLUSIVELY_LOCKED;
+    } else {
+	return EXCLUSIVE_IS_BUSY;
+    }
+}
+
 #endif
 
 static ERTS_INLINE void db_lock(Process* self, DbTable* tb, db_lock_kind_t kind)
@@ -1124,7 +1135,7 @@ BIF_RETTYPE ets_insert_2(BIF_ALIST_2)
 	    goto badarg;
 	}
 	for (lst = BIF_ARG_2; is_list(lst); lst = CDR(list_val(lst))) {
-	    cret = meth->db_put(tb, CAR(list_val(lst)), 0);
+	    cret = meth->db_put(tb, CAR(list_val(lst)), DB_PUT_NORMAL);
 	    if (cret != DB_ERROR_NONE)
 		break;
 	}
@@ -1133,7 +1144,7 @@ BIF_RETTYPE ets_insert_2(BIF_ALIST_2)
 	    (arityval(*tuple_val(BIF_ARG_2)) < tb->common.keypos)) {
 	    goto badarg;
 	}
-	cret = meth->db_put(tb, BIF_ARG_2, 0);
+	cret = meth->db_put(tb, BIF_ARG_2, DB_PUT_NORMAL);
     }
 
     db_unlock(BIF_P, tb, kind);
@@ -1198,7 +1209,7 @@ BIF_RETTYPE ets_insert_new_2(BIF_ALIST_2)
 	    }
     
 	    for (lst = BIF_ARG_2; is_list(lst); lst = CDR(list_val(lst))) {
-		cret = meth->db_put(tb,CAR(list_val(lst)), 0);
+		cret = meth->db_put(tb,CAR(list_val(lst)), DB_PUT_NORMAL);
 		if (cret != DB_ERROR_NONE)
 		    break;
 	    }
@@ -1223,8 +1234,7 @@ BIF_RETTYPE ets_insert_new_2(BIF_ALIST_2)
 	|| (arityval(*tuple_val(obj)) < tb->common.keypos)) {
 	goto badarg;
     }
-    cret = tb->common.meth->db_put(tb, obj,
-				   1); /* key_clash_fail */
+    cret = tb->common.meth->db_put(tb, obj, DB_PUT_KEYCLASH_CHECK);
 
 done:
     db_unlock(BIF_P, tb, kind);
@@ -4010,11 +4020,14 @@ static newlock_node* get_locknode(Process* p) {
     erts_atomic_t* lockptr = &RUNQ_READ_RQ(&p->run_queue)->locking.ets_locknode;
     newlock_node* n = (newlock_node*) erts_atomic_read_nob(lockptr);
     if( n == NULL) { /* TODO UGLY AS HELL CODE MOVE TO PROCESS INIT */
+	int i;
 	Uint total, online, active;
 	(void) erts_schedulers_state(&total, &online, &active, 0);
 	n = malloc(sizeof(newlock_node));
 	n->queues = malloc(sizeof(queue_handle)*total);
-	queue_init(n->queues);
+	for(i=0; i<total; i++) {
+	    queue_init(n->queues[i]);
+	}
 	erts_atomic_set_mb(lockptr, (erts_aint_t)n);
     }
     return n;

@@ -44,10 +44,12 @@ typedef struct newlock_locknode {
     erts_atomic32_t locked;
     uint32_t pass_counter;
     erts_atomic_t next;
-    queue_handle* queues;
+    queue_handle** queues;
 } newlock_node;
 
 void acquire_newlock(erts_atomic_t* L, newlock_node* I);
+int try_newlock(erts_atomic_t* L, newlock_node* I);
+int is_free_newlock(erts_atomic_t* L);
 void release_newlock(erts_atomic_t* L, newlock_node* I);
 
 #endif // ERL_NEWLOCK_H
