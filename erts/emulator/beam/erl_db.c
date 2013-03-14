@@ -41,6 +41,7 @@
 #define ERTS_WANT_DB_INTERNAL__
 #include "erl_db.h"
 #include "erl_db_generic_interface.h"
+#include "erl_newlock.h"
 #include "bif.h"
 #include "big.h"
 
@@ -228,8 +229,10 @@ static BIF_RETTYPE ets_select2(Process* p, Eterm arg1, Eterm arg2);
 static BIF_RETTYPE ets_select3(Process* p, Eterm arg1, Eterm arg2, Eterm arg3);
 
 #ifdef ERTS_SMP
-static void wait_ets_hazards_gone(Process* self, void* current);
-static void set_ets_hazard(Process* p, void* current);
+static void wait_ets_readers_gone(Process* self, void* current);
+static void set_ets_reader(Process* p, void* current);
+static newlock_node* get_locknode(Process* p);
+
 #endif
 
 /* 
@@ -302,35 +305,31 @@ static ERTS_INLINE void db_init_lock(DbTable* tb, int use_frequent_read_lock,
 
 #ifdef ERTS_SMP
 static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {
-    /* TODO mb or other barrier? */
-    erts_aint_t previous_value;
-    for(;;) { /* spin on other exclusive access */
-	while (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL); /* spin on exclusive access */
-        previous_value = erts_smp_atomic_cmpxchg_mb(&tb->common.exclusive, (erts_aint_t)self, (erts_aint_t)NULL);
-	if (previous_value == (erts_aint_t)NULL) {
-	    break;
-	}
-    }
-    wait_ets_hazards_gone(self, tb);
+    newlock_node* mynode = get_locknode(self);
+    acquire_newlock(&tb->common.exclusive, mynode);
+    wait_ets_readers_gone(self, tb);
 }
 
 static ERTS_INLINE void db_shared_lock(Process* self, DbTable* tb) {
-    set_ets_hazard(self, tb);
+    set_ets_reader(self, tb);
     /* TODO mb or other barrier? */
     for(;;) {
 	if (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL) {
-	    set_ets_hazard(self, NULL);
-	    while (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL); /* spin on exclusive access */
-	    set_ets_hazard(self, tb);
+	    set_ets_reader(self, NULL);
+	    /* while (erts_smp_atomic_read_mb(&tb->common.exclusive) != (erts_aint_t)NULL); // disabled, promote to exclusive lock instead */ /* spin on exclusive access */
+	    newlock_node* mynode = get_locknode(self);
+	    acquire_newlock(&tb->common.exclusive, mynode);
+	    set_ets_reader(self, tb);
+	    release_newlock(&tb->common.exclusive, mynode);
 	} else {
 	    return;
 	}
     }
 }
 
-static ERTS_INLINE void db_exclusive_unlock(DbTable* tb) {
-    /* TODO mb or other barrier? */
-    erts_smp_atomic_set_mb(&tb->common.exclusive, (erts_aint_t)NULL);
+static ERTS_INLINE void db_exclusive_unlock(Process* self, DbTable* tb) {
+    newlock_node* mynode = get_locknode(self);
+    release_newlock(&tb->common.exclusive, mynode);
 }
 #endif
 
@@ -376,10 +375,10 @@ static ERTS_INLINE void db_unlock(Process* self, DbTable* tb, db_lock_kind_t kin
 	if (kind == LCK_WRITE) {
 	    ASSERT(tb->common.is_thread_safe);
 	    tb->common.is_thread_safe = 0;
-	    db_exclusive_unlock(tb);
+	    db_exclusive_unlock(self,tb);
 	}
 	else {
-    	    set_ets_hazard(self, NULL);
+    	    set_ets_reader(self, NULL);
 	    ASSERT(!tb->common.is_thread_safe);
 	}
     }
@@ -388,10 +387,10 @@ static ERTS_INLINE void db_unlock(Process* self, DbTable* tb, db_lock_kind_t kin
 	switch (kind) {
 	case LCK_WRITE:
 	case LCK_WRITE_REC:
-	    db_exclusive_unlock(tb);
+	    db_exclusive_unlock(self, tb);
 	    break;
 	default:
-    	    set_ets_hazard(self, NULL);
+    	    set_ets_reader(self, NULL);
 	}
     }
 #endif
@@ -446,7 +445,7 @@ DbTable* db_get_table_aux(Process *p,
 	    db_lock(p, tb, kind);
 #ifdef ERTS_SMP
 	    if(IS_SLOT_DEAD(slot)){
-		set_ets_hazard(p, NULL);
+		set_ets_reader(p, NULL);
 		tb = NULL;
 	    }
 #endif
@@ -3987,8 +3986,8 @@ erts_ets_colliding_names(Process* p, Eterm name, Uint cnt)
 
 #ifdef ERTS_SMP
 
-/* this waits for all ets hazards to disappear */
-static void wait_ets_hazards_gone(Process* self, void* current) {
+/* this waits for all ets readerss to disappear */
+static void wait_ets_readers_gone(Process* self, void* current) {
     int i;
     Uint total, online, active;
     ErtsRunQueue* own = RUNQ_READ_RQ(&self->run_queue);
@@ -3996,15 +3995,29 @@ static void wait_ets_hazards_gone(Process* self, void* current) {
     for(i=0; i<online; i++) {
 	ErtsRunQueue* q = ERTS_RUNQ_IX(i);
 	if(q == own) continue;
-	erts_atomic_t* hazardptr = &q->hazard.ets;
-	while(current == (void*) erts_atomic_read_mb(hazardptr)); /* wait for this to change */
+	erts_atomic_t* readerptr = &q->locking.ets_reader;
+	while(current == (void*) erts_atomic_read_mb(readerptr)); /* wait for this to change */
     }
 }
 
-/* this sets the hazard pointer to the requested value */
-static void set_ets_hazard(Process* p, void* current) {
-    erts_atomic_t* hazardptr = &RUNQ_READ_RQ(&p->run_queue)->hazard.ets;
-    erts_atomic_set_mb(hazardptr, (erts_aint_t) current);
+/* this sets the reader pointer to the requested value */
+static void set_ets_reader(Process* p, void* current) {
+    erts_atomic_t* readerptr = &RUNQ_READ_RQ(&p->run_queue)->locking.ets_reader;
+    erts_atomic_set_mb(readerptr, (erts_aint_t) current);
+}
+
+static newlock_node* get_locknode(Process* p) {
+    erts_atomic_t* lockptr = &RUNQ_READ_RQ(&p->run_queue)->locking.ets_locknode;
+    newlock_node* n = (newlock_node*) erts_atomic_read_nob(lockptr);
+    if( n == NULL) { /* TODO UGLY AS HELL CODE MOVE TO PROCESS INIT */
+	Uint total, online, active;
+	(void) erts_schedulers_state(&total, &online, &active, 0);
+	n = malloc(sizeof(newlock_node));
+	n->queues = malloc(sizeof(queue_handle)*total);
+	queue_init(n->queues);
+	erts_atomic_set_mb(lockptr, (erts_aint_t)n);
+    }
+    return n;
 }
 
 #endif

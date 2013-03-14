@@ -745,6 +745,7 @@ RUN_OBJS = \
 	$(OBJDIR)/erl_bif_binary.o      $(OBJDIR)/erl_ao_firstfit_alloc.o \
 	$(OBJDIR)/erl_thr_queue.o	$(OBJDIR)/erl_sched_spec_pre_alloc.o \
 	$(OBJDIR)/erl_ptab.o \
+	$(OBJDIR)/erl_newlock.o \
 	$(OBJDIR)/erl_db_generic_interface.o \
 	$(OBJDIR)/erl_db_generic_interface_ds.o \
 	$(OBJDIR)/kvset.o \

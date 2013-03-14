@@ -387,8 +387,9 @@ struct ErtsRunQueue_ {
     } ports;
 
     struct {
-	erts_atomic_t ets;
-    } hazard;
+	erts_atomic_t ets_locknode;
+	erts_atomic_t ets_reader;
+    } locking;
 };
 
 typedef union {
