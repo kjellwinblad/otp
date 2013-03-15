@@ -357,7 +357,7 @@ static int db_last_tree(Process *p, DbTable *tbl,
 static int db_prev_tree(Process *p, DbTable *tbl, 
 			Eterm key,
 			Eterm *ret);
-static int db_put_tree(DbTable *tbl, Eterm obj, int key_clash_fail);
+static int db_put_tree(DbTable *tbl, Eterm obj, int mode);
 static int db_get_tree(Process *p, DbTable *tbl, 
 		       Eterm key,  Eterm *ret);
 static int db_member_tree(DbTable *tbl, Eterm key, Eterm *ret);
@@ -598,7 +598,7 @@ static ERTS_INLINE int cmp_key_eq(DbTableTree* tb, Eterm key, Eterm* key_base,
 	|| cmp_rel(key, key_base, obj_key, obj->dbterm.tpl) == 0;
 }
 
-static int db_put_tree(DbTable *tbl, Eterm obj, int key_clash_fail)
+static int db_put_tree(DbTable *tbl, Eterm obj, int mode)
 {
     DbTableTree *tb = &tbl->tree;
     /* Non recursive insertion in AVL tree, building our own stack */
@@ -625,7 +625,11 @@ static int db_put_tree(DbTable *tbl, Eterm obj, int key_clash_fail)
 		erts_smp_atomic_dec_nob(&tb->common.nitems);
 		return DB_ERROR_SYSRES;
 	    }
-	    *this = new_dbterm(tb, obj);
+	    if(mode == DB_PUT_DELAYED) {
+		*this = (TreeDbTerm*) obj; /* TODO make clear in type that this is not always an Eterm */
+	    } else {
+		*this = new_dbterm(tb, obj);
+	    }
 	    (*this)->balance = 0;
 	    (*this)->left = (*this)->right = NULL;
 	    break;
@@ -638,8 +642,12 @@ static int db_put_tree(DbTable *tbl, Eterm obj, int key_clash_fail)
 	    dstack[dpos++] = DIR_RIGHT;
 	    tstack[tpos++] = this;
 	    this = &((*this)->right);
-	} else if (!key_clash_fail) { /* Equal key and this is a set, replace. */
-	    *this = replace_dbterm(tb, *this, obj);
+	} else if (mode != DB_PUT_KEYCLASH_CHECK) { /* Equal key and this is a set, replace. */
+	    if(mode == DB_PUT_DELAYED) {
+		*this = (TreeDbTerm*) obj; /* TODO make clear in type that this is not always an Eterm */
+	    } else {
+		*this = replace_dbterm(tb, *this, obj);
+	    }
 	    break;
 	} else {
 	    return DB_ERROR_BADKEY; /* key already exists */

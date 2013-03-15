@@ -36,7 +36,7 @@ int db_prev_generic_interface(Process* p,
                           Eterm* ret);
 int db_put_generic_interface(DbTable* tb, /* [in out] */ 
                          Eterm obj,
-                         int key_clash_fail); /* DB_ERROR_BADKEY if key exists */ 
+                         int mode); /* DB_ERROR_BADKEY if key exists */ 
 int db_get_generic_interface(Process* p, 
                          DbTable* tb, /* [in out] */ 
                          Eterm key, 
@@ -257,10 +257,16 @@ int db_prev_generic_interface(Process* p,
 }
 int db_put_generic_interface(DbTable* tbl, /* [in out] */ 
                          Eterm obj,
-                         int key_clash_fail)
+                         int mode)
 {
 
-    void * element_to_put = new_dbterm(tbl, obj);
+    void * element_to_put;
+    
+    if(mode == DB_PUT_DELAYED) {
+	element_to_put = (void*) obj; /* TODO make clear in type that this is not always an Eterm */
+    } else {
+	element_to_put = new_dbterm(tbl, obj);
+    }
 
     KVSet *tb = tbl->generic_interface.kvset;
 

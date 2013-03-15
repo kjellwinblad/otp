@@ -4129,16 +4129,18 @@ static ERTS_INLINE Eterm locking_get_temporary_dbterm(DbTerm* dbterm, DbTable* t
 
 int db_enqueue(Process* p, DbTable* tb, Eterm entry, int type) {
     DbTerm* dbt;
+    DbTableMethod* meth = tb->common.meth;
     erts_atomic_t* lockptr = &tb->common.exclusive;
     int index = RUNQ_READ_RQ(&p->run_queue)->ix;
     newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
+    queue_handle* q;
     if(thelock == NULL) return LOCK_FAIL; /* safety check: abort enqueuing if lock disappeared, TODO this might cause superfluous queue-lock-entries */
 
-    queue_handle* q = thelock->queues[index];
+    q = thelock->queues[index];
     /* TODO implementation choice: enqueue if full queue, or spin for space in queue */
     if(queue_is_full(q)) return LOCK_FAIL; /* enqueue */
     /* while(queue_is_full(q)); */ /* spin */
-    dbt = locking_make_temporary_dbterm(tb, entry);
+    dbt = meth->db_new_dbterm(tb, entry);
     queue_push(q, (void*) dbt);
     return LOCK_SUCCESS;
 }
@@ -4154,10 +4156,8 @@ void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
     for(i=0; i < total; i++) {
 	queue_handle* q = lock->queues[i];
 	while(!queue_is_empty(q)) {
-	    void* dbt = queue_pop(q);
-	    Eterm entry = locking_get_temporary_dbterm(dbt, tb, p);
-	    db_free_term(tb, dbt, 0);
-	    cret = meth->db_put(tb, entry, DB_PUT_NORMAL);
+	    void* dbterm = queue_pop(q);
+	    cret = meth->db_put(tb, (Eterm) dbterm, DB_PUT_DELAYED);
 	}
     }
 }

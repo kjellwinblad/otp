@@ -797,7 +797,7 @@ static int db_next_hash(Process *p, DbTable *tbl, Eterm key, Eterm *ret)
     return DB_ERROR_NONE;
 }    
 
-int db_put_hash(DbTable *tbl, Eterm obj, int key_clash_fail)
+int db_put_hash(DbTable *tbl, Eterm obj, int mode)
 {
     DbTableHash *tb = &tbl->hash;
     HashValue hval;
@@ -834,17 +834,21 @@ int db_put_hash(DbTable *tbl, Eterm obj, int key_clash_fail)
 	if (b->hvalue == INVALID_HASH) {
 	    erts_smp_atomic_inc_nob(&tb->common.nitems);
 	}
-	else if (key_clash_fail) {
+	else if (mode == DB_PUT_KEYCLASH_CHECK) {
 	    ret = DB_ERROR_BADKEY;
 	    goto Ldone;
 	}
-	q = replace_dbterm(tb, b, obj);
+	if(mode == DB_PUT_DELAYED) {
+	    q = (HashDbTerm*) obj; /* TODO make clear in type that this is not always an Eterm */
+	} else {
+	    q = replace_dbterm(tb, b, obj);
+	}
 	q->next = bnext;
 	q->hvalue = hval; /* In case of INVALID_HASH */
 	*bp = q;
 	goto Ldone;
     }
-    else if (key_clash_fail) { /* && (DB_BAG || DB_DUPLICATE_BAG) */
+    else if (mode == DB_PUT_KEYCLASH_CHECK) { /* && (DB_BAG || DB_DUPLICATE_BAG) */
 	q = b;
 	do {
 	    if (q->hvalue != INVALID_HASH) {
@@ -877,7 +881,11 @@ int db_put_hash(DbTable *tbl, Eterm obj, int key_clash_fail)
     /*else DB_DUPLICATE_BAG */
 
 Lnew:
-    q = new_dbterm(tb, obj);
+    if(mode == DB_PUT_DELAYED) {
+	q = (HashDbTerm*) obj; /* TODO make clear in type that this is not always an Eterm */
+    } else {
+	q = new_dbterm(tb, obj);
+    }
     q->hvalue = hval;
     q->next = b;
     *bp = q;
