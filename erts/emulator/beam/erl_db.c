@@ -186,7 +186,8 @@ typedef enum {
     LCK_READ=1,     /* read only access */
     LCK_WRITE=2,    /* exclusive table write access */
     LCK_WRITE_REC=3, /* record write access */
-    LCK_NONE=4
+    LCK_WILLTRY=4, /* promise to use trylock, if that succeeds equal to WRITE_REC */
+    LCK_NONE=5
 } db_lock_kind_t;
 
 extern DbTableMethod db_hash;
@@ -232,7 +233,11 @@ static BIF_RETTYPE ets_select3(Process* p, Eterm arg1, Eterm arg2, Eterm arg3);
 static void wait_ets_readers_gone(Process* self, void* current);
 static void set_ets_reader(Process* p, void* current);
 static newlock_node* get_locknode(Process* p);
-
+static int db_checkqueue(Process* p, DbTable* tb, newlock_node* lock);
+static void db_dequeue(Process* p, DbTable* tb, newlock_node* lock);;
+static int db_enqueue(Process* p, DbTable* tb, Eterm entry, int type);
+#define HAS_ENTRY 1
+#define HAS_NO_ENTRIES 0
 #endif
 
 /* 
@@ -303,6 +308,11 @@ static ERTS_INLINE void db_init_lock(DbTable* tb, int use_frequent_read_lock,
 #endif
 }
 
+
+#define LOCK_IRRELEVANT 2
+#define LOCK_SUCCESS 1
+#define LOCK_FAIL 0
+
 #ifdef ERTS_SMP
 static ERTS_INLINE void db_exclusive_lock(Process* self, DbTable* tb) {
     newlock_node* mynode = get_locknode(self);
@@ -315,33 +325,38 @@ static ERTS_INLINE void db_shared_lock(Process* self, DbTable* tb) {
     /* Check for no exclusive access ongoing, promote to exclusive lock if it is.
      * This provides starvation freedom for the reader.
      */
-    if (!is_free_newlock(&tb->common.exclusive))  {
+    if(!is_free_newlock(&tb->common.exclusive))  {
+	newlock_node* mynode;
 	set_ets_reader(self, NULL);
-	newlock_node* mynode = get_locknode(self);
+	mynode = get_locknode(self);
 	acquire_newlock(&tb->common.exclusive, mynode);
 	set_ets_reader(self, tb);
+
 	release_newlock(&tb->common.exclusive, mynode);
     }
 }
 
-static ERTS_INLINE void db_exclusive_unlock(Process* self, DbTable* tb) {
-    newlock_node* mynode = get_locknode(self);
-    release_newlock(&tb->common.exclusive, mynode);
-}
-
-#define EXCLUSIVELY_LOCKED 1
-#define EXCLUSIVE_IS_BUSY 0
 
 static ERTS_INLINE int db_try_exclusive_lock(Process* self, DbTable* tb) {
     newlock_node* mynode = get_locknode(self);
     if(try_newlock(&tb->common.exclusive, mynode)) {
 	wait_ets_readers_gone(self, tb);
-	return EXCLUSIVELY_LOCKED;
+	return LOCK_SUCCESS;
     } else {
-	return EXCLUSIVE_IS_BUSY;
+	return LOCK_FAIL;
     }
 }
 
+static ERTS_INLINE void db_exclusive_unlock(Process* self, DbTable* tb) {
+    newlock_node* mynode = get_locknode(self);
+    /* have real writelock, need to check queues */
+    do {
+	/* TODO: make db_dequeue check to avoid double run through queues */
+	while(db_checkqueue(self, tb, mynode) == HAS_ENTRY)
+	    db_dequeue(self, tb, mynode);
+	release_newlock(&tb->common.exclusive, mynode);
+    } while (db_checkqueue(self, tb, mynode) == HAS_ENTRY && db_try_exclusive_lock(self, tb) == LOCK_SUCCESS);
+}
 #endif
 
 static ERTS_INLINE void db_lock(Process* self, DbTable* tb, db_lock_kind_t kind)
@@ -353,6 +368,7 @@ static ERTS_INLINE void db_lock(Process* self, DbTable* tb, db_lock_kind_t kind)
 	    db_exclusive_lock(self, tb);
 	    tb->common.is_thread_safe = 1;
 	} else {
+	    /* LCK_WILLTRY || LCK_WRITE_REC || LCK_READ */
 	    db_shared_lock(self, tb);
 	    ASSERT(!tb->common.is_thread_safe);
 	}
@@ -360,16 +376,30 @@ static ERTS_INLINE void db_lock(Process* self, DbTable* tb, db_lock_kind_t kind)
     else
     { 
 	switch (kind) {
-	case LCK_WRITE:
-	case LCK_WRITE_REC:
-	    db_exclusive_lock(self, tb);
-	    break;
-	default:
-	    db_shared_lock(self, tb);
+	    case LCK_WRITE:
+	    case LCK_WRITE_REC:
+		db_exclusive_lock(self, tb);
+		break;
+	    case LCK_READ:
+		db_shared_lock(self, tb);
+	        break;
+	    default: /* LCK_WILLTRY: no locking */
+		break;
 	}
 	ASSERT(tb->common.is_thread_safe);
     }
 #endif
+}
+
+static ERTS_INLINE int db_trylock(Process* self, DbTable* tb) {
+#ifdef ERTS_SMP
+    if (!(tb->common.type & DB_FINE_LOCKED)) {
+	return db_try_exclusive_lock(self, tb);
+    }
+    /* return LOCK_IRRELEVANT: table read locked earlier */
+#endif
+    /* non-SMP: this function is irrelevant */
+    return LOCK_IRRELEVANT;
 }
 
 static ERTS_INLINE void db_unlock(Process* self, DbTable* tb, db_lock_kind_t kind)
@@ -389,6 +419,7 @@ static ERTS_INLINE void db_unlock(Process* self, DbTable* tb, db_lock_kind_t kin
 	    db_exclusive_unlock(self,tb);
 	}
 	else {
+	    /* LCK_WILLTRY || LCK_WRITE_REC || LCK_READ */
     	    set_ets_reader(self, NULL);
 	    ASSERT(!tb->common.is_thread_safe);
 	}
@@ -399,6 +430,10 @@ static ERTS_INLINE void db_unlock(Process* self, DbTable* tb, db_lock_kind_t kin
 	case LCK_WRITE:
 	case LCK_WRITE_REC:
 	    db_exclusive_unlock(self, tb);
+	    break;
+	case LCK_WILLTRY:
+	    /* TODO: can this path even occur? (e.g. error-handling?) */
+	    /* unlocking a WILLTRY that was not successful is useless. successful trylocks use WRITE_REC instead */
 	    break;
 	default:
     	    set_ets_reader(self, NULL);
@@ -1114,7 +1149,7 @@ BIF_RETTYPE ets_insert_2(BIF_ALIST_2)
 
     /* Write lock table if more than one object to keep atomicy */
     kind = ((is_list(BIF_ARG_2) && CDR(list_val(BIF_ARG_2)) != NIL)
-	    ? LCK_WRITE : LCK_WRITE_REC);
+	    ? LCK_WRITE : LCK_WILLTRY);
 
     if ((tb = db_get_table(BIF_P, BIF_ARG_1, DB_WRITE, kind)) == NULL) {
 	BIF_ERROR(BIF_P, BADARG);
@@ -1123,31 +1158,55 @@ BIF_RETTYPE ets_insert_2(BIF_ALIST_2)
 	db_unlock(BIF_P, tb, kind);
 	BIF_RET(am_true);
     }
-    meth = tb->common.meth;
-    if (is_list(BIF_ARG_2)) {
-	for (lst = BIF_ARG_2; is_list(lst); lst = CDR(list_val(lst))) {
-	    if (is_not_tuple(CAR(list_val(lst))) || 
-		(arityval(*tuple_val(CAR(list_val(lst)))) < tb->common.keypos)) {
+
+    if(kind == LCK_WILLTRY) {
+	int test;
+	do {
+	if(db_trylock(BIF_P, tb) != LOCK_FAIL) goto normal_path;
+	/* lock already taken -> enqueue instead of real insert */
+	    if (is_not_tuple(BIF_ARG_2) || 
+		(arityval(*tuple_val(BIF_ARG_2)) < tb->common.keypos)) {
 		goto badarg;
 	    }
-	}
-	if (lst != NIL) {
-	    goto badarg;
-	}
-	for (lst = BIF_ARG_2; is_list(lst); lst = CDR(list_val(lst))) {
-	    cret = meth->db_put(tb, CAR(list_val(lst)), DB_PUT_NORMAL);
-	    if (cret != DB_ERROR_NONE)
-		break;
-	}
+	    test = db_enqueue(BIF_P, tb, BIF_ARG_2, DB_PUT_DELAYED);
+	    if (test == LOCK_FAIL) {
+		db_lock(BIF_P, tb, LCK_WRITE_REC);
+		goto normal_path;
+	    }
+	    /* check lock is still in use, otherwise trigger dequeuing */
+	    if(db_trylock(BIF_P, tb) == LOCK_SUCCESS) {
+		db_unlock(BIF_P, tb, LCK_WRITE_REC);
+	    }
+	} while (test == LOCK_FAIL); // dead while
     } else {
-	if (is_not_tuple(BIF_ARG_2) || 
-	    (arityval(*tuple_val(BIF_ARG_2)) < tb->common.keypos)) {
-	    goto badarg;
+normal_path:
+	if(kind == LCK_WILLTRY) kind = LCK_WRITE_REC;
+	meth = tb->common.meth;
+	if (is_list(BIF_ARG_2)) {
+	    for (lst = BIF_ARG_2; is_list(lst); lst = CDR(list_val(lst))) {
+		if (is_not_tuple(CAR(list_val(lst))) || 
+		    (arityval(*tuple_val(CAR(list_val(lst)))) < tb->common.keypos)) {
+		    goto badarg;
+		}
+	    }
+	    if (lst != NIL) {
+		goto badarg;
+	    }
+	    for (lst = BIF_ARG_2; is_list(lst); lst = CDR(list_val(lst))) {
+		cret = meth->db_put(tb, CAR(list_val(lst)), DB_PUT_NORMAL);
+		if (cret != DB_ERROR_NONE)
+		    break;
+	    }
+	} else {
+	    if (is_not_tuple(BIF_ARG_2) || 
+		(arityval(*tuple_val(BIF_ARG_2)) < tb->common.keypos)) {
+		goto badarg;
+	    }
+	    cret = meth->db_put(tb, BIF_ARG_2, DB_PUT_NORMAL);
 	}
-	cret = meth->db_put(tb, BIF_ARG_2, DB_PUT_NORMAL);
+	
+	db_unlock(BIF_P, tb, kind);
     }
-
-    db_unlock(BIF_P, tb, kind);
     
     switch (cret) {
     case DB_ERROR_NONE:
@@ -4003,9 +4062,10 @@ static void wait_ets_readers_gone(Process* self, void* current) {
     ErtsRunQueue* own = RUNQ_READ_RQ(&self->run_queue);
     (void) erts_schedulers_state(&total, &online, &active, 0);
     for(i=0; i<online; i++) {
+	erts_atomic_t* readerptr;
 	ErtsRunQueue* q = ERTS_RUNQ_IX(i);
 	if(q == own) continue;
-	erts_atomic_t* readerptr = &q->locking.ets_reader;
+	readerptr = &q->locking.ets_reader;
 	while(current == (void*) erts_atomic_read_mb(readerptr)); /* wait for this to change */
     }
 }
@@ -4024,14 +4084,96 @@ static newlock_node* get_locknode(Process* p) {
 	Uint total, online, active;
 	(void) erts_schedulers_state(&total, &online, &active, 0);
 	n = malloc(sizeof(newlock_node));
-	n->queues = malloc(sizeof(queue_handle)*total);
+	erts_atomic32_init_nob(&n->locked, 0);
+	n->pass_counter = 0;
+	erts_atomic_init_nob(&n->next, 0);
+	n->queues = malloc(sizeof(queue_handle*)*total);
 	for(i=0; i<total; i++) {
+	    n->queues[i] = malloc(sizeof(queue_handle));
 	    queue_init(n->queues[i]);
 	}
 	erts_atomic_set_mb(lockptr, (erts_aint_t)n);
     }
     return n;
 }
+
+static ERTS_INLINE DbTerm * locking_make_temporary_dbterm(DbTable *tb, Eterm obj)
+{
+    DbTerm * p;
+    if (tb->common.compress) {
+	p = db_store_term_comp(&tb->common, NULL, 0, obj);
+    }   
+    else {
+	p = db_store_term(&tb->common, NULL, 0, obj);
+    }   
+    return p;
+}
+
+static ERTS_INLINE Eterm locking_get_temporary_dbterm(DbTerm* dbterm, DbTable* tbl, Process* p) {
+    Eterm copy;
+    Eterm *hp, *hend;
+    Eterm ret;
+    if(NULL == dbterm){
+	ret = NIL;
+    } else {
+	hp = HAlloc(p, dbterm->size + 2);
+	hend = hp + dbterm->size + 2;
+	copy = db_copy_object_from_ets(&tbl->common, dbterm, &hp, &MSO(p));
+	ret = CONS(hp, copy, NIL);
+	hp += 2;
+	HRelease(p,hend,hp);
+    }
+    return ret;
+}
+
+
+int db_enqueue(Process* p, DbTable* tb, Eterm entry, int type) {
+    DbTerm* dbt;
+    erts_atomic_t* lockptr = &tb->common.exclusive;
+    int index = RUNQ_READ_RQ(&p->run_queue)->ix;
+    newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
+    if(thelock == NULL) return LOCK_FAIL; /* safety check: abort enqueuing if lock disappeared, TODO this might cause superfluous queue-lock-entries */
+
+    queue_handle* q = thelock->queues[index];
+    /* TODO implementation choice: enqueue if full queue, or spin for space in queue */
+    if(queue_is_full(q)) return LOCK_FAIL; /* enqueue */
+    /* while(queue_is_full(q)); */ /* spin */
+    dbt = locking_make_temporary_dbterm(tb, entry);
+    queue_push(q, (void*) dbt);
+    return LOCK_SUCCESS;
+}
+
+void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
+    int i;
+    int cret;
+    DbTableMethod* meth = tb->common.meth;
+    
+    /* TODO: find total more efficiently */
+    Uint total, online, active;
+    (void) erts_schedulers_state(&total, &online, &active, 0);
+    for(i=0; i < total; i++) {
+	queue_handle* q = lock->queues[i];
+	while(!queue_is_empty(q)) {
+	    void* dbt = queue_pop(q);
+	    Eterm entry = locking_get_temporary_dbterm(dbt, tb, p);
+	    db_free_term(tb, dbt, 0);
+	    cret = meth->db_put(tb, entry, DB_PUT_NORMAL);
+	}
+    }
+}
+
+int db_checkqueue(Process* p, DbTable* tb, newlock_node* lock) {
+    int i;
+    /* TODO: find total more efficiently */
+    Uint total, online, active;
+    (void) erts_schedulers_state(&total, &online, &active, 0);
+    for(i=0; i < total; i++) {
+	if(!queue_is_empty(lock->queues[i]))
+	    return HAS_ENTRY;
+    }
+    return HAS_NO_ENTRIES;
+}
+    
 
 #endif
 
