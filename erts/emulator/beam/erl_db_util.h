@@ -189,6 +189,10 @@ typedef struct db_table_method
 			       void *arg);
     void (*db_check_table)(DbTable* tb);
 
+    /* provide DbTerm allocation/deallocation for use by method table users */
+    DbTerm* (*db_new_dbterm)(DbTable* tb, Eterm obj);
+    void (*db_free_dbterm)(DbTable* tb, DbTerm* p);
+
     /* Lookup a dbterm for updating. Return false if not found.
     */
     int (*db_lookup_dbterm)(DbTable*, Eterm key, 

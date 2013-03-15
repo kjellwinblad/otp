@@ -443,6 +443,11 @@ static int db_delete_all_objects_hash(Process* p, DbTable* tbl);
 #ifdef HARDDEBUG
 static void db_check_table_hash(DbTableHash *tb);
 #endif
+
+/* provide DbTerm allocation/deallocation for use by method table users */
+static DbTerm* new_dbterm_hash(DbTable* tb, Eterm obj);
+static void free_dbterm_hash(DbTable *tb, DbTerm* p);
+
 static int db_lookup_dbterm_hash(DbTable *tbl, Eterm key, DbUpdateHandle* handle);
 static void db_finalize_dbterm_hash(DbUpdateHandle* handle);
 
@@ -511,6 +516,16 @@ static ERTS_INLINE HashDbTerm* replace_dbterm(DbTableHash* tb, HashDbTerm* old,
 }
 
 
+/* delegate to inlined free_term */
+void free_dbterm_hash(DbTable *tb, DbTerm* p) {
+    free_term((DbTableHash*) tb, (HashDbTerm*) p);
+}
+
+/* delegate to inlined new_dbterm */
+DbTerm* new_dbterm_hash(DbTable* tb, Eterm obj) {
+    return (DbTerm*) new_dbterm((DbTableHash*) tb, obj);
+}
+
 
 /*
 ** External interface 
@@ -546,6 +561,8 @@ DbTableMethod db_hash =
 #else
     NULL,
 #endif
+    new_dbterm_hash,
+    free_dbterm_hash,
     db_lookup_dbterm_hash,
     db_finalize_dbterm_hash
 };

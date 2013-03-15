@@ -398,6 +398,11 @@ static int db_delete_all_objects_tree(Process* p, DbTable* tbl);
 #ifdef HARDDEBUG
 static void db_check_table_tree(DbTable *tbl);
 #endif
+
+/* provide DbTerm allocation/deallocation for use by method table users */
+static DbTerm* new_dbterm_tree(DbTable* tb, Eterm obj);
+static void free_dbterm_tree(DbTable *tb, DbTerm* p);
+
 static int db_lookup_dbterm_tree(DbTable *, Eterm key, DbUpdateHandle*);
 static void db_finalize_dbterm_tree(DbUpdateHandle*);
 
@@ -441,6 +446,8 @@ DbTableMethod db_tree =
 #else
     NULL,
 #endif
+    new_dbterm_tree,
+    free_dbterm_tree,
     db_lookup_dbterm_tree,
     db_finalize_dbterm_tree
 
@@ -448,6 +455,15 @@ DbTableMethod db_tree =
 
 
 
+/* delegate to inlined free_term */
+void free_dbterm_tree(DbTable *tb, DbTerm* p) {
+    free_term((DbTableTree*) tb, (TreeDbTerm*) p);
+}
+
+/* delegate to inlined new_dbterm */
+DbTerm* new_dbterm_tree(DbTable* tb, Eterm obj) {
+    return (DbTerm*) new_dbterm((DbTableTree*) tb, obj);
+}
 
 
 void db_initialize_tree(void)

@@ -107,6 +107,11 @@ void db_foreach_offheap_generic_interface(DbTable* db,  /* [in out] */
                                       void *arg);
 void db_check_table_generic_interface(DbTable* tb);
 
+/* provide DbTerm allocation/deallocation for use by method table users */
+DbTerm* new_dbterm_generic_interface(DbTable* tb, Eterm obj);
+void free_dbterm_generic_interface(DbTable *tb, DbTerm* p);
+
+
 /* Lookup a dbterm for updating. Return false if not found.
  */
 int db_lookup_dbterm_generic_interface(DbTable*, Eterm key, 
@@ -153,6 +158,8 @@ DbTableMethod db_generic_interface =
 #else
         NULL,
 #endif
+	new_dbterm_generic_interface,
+	free_dbterm_generic_interface,
         db_lookup_dbterm_generic_interface,
         db_finalize_dbterm_generic_interface
     };
@@ -180,6 +187,15 @@ static ERTS_INLINE DbTerm * new_dbterm(DbTable *tb, Eterm obj)
     return p;
 }
 
+/* delegate to inlined free_term */
+void free_dbterm_generic_interface(DbTable *tb, DbTerm* p) {
+    free_term(tb, p);
+}
+
+/* delegate to inlined new_dbterm */
+DbTerm* new_dbterm_generic_interface(DbTable* tb, Eterm obj) {
+    return new_dbterm(tb, obj);
+}
 
 int db_create_generic_interface(Process *p, DbTable *tbl)
 {
