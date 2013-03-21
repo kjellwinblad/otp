@@ -4125,12 +4125,13 @@ void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
     erts_atomic_t* lockptr = &tb->common.exclusive;
     newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
    
-    /* mark queue closed */
-    erts_atomic32_set_mb(&lock->counter, MAX_QUEUE_LENGTH);
-
     /* TODO: find total more efficiently */
     Uint total, online, active;
     (void) erts_schedulers_state(&total, &online, &active, 0);
+    
+    /* mark queue closed */
+    erts_aint32_t countervalue = erts_atomic32_xchg_mb(&lock->counter, -total);
+
     do {
 	more = 0;
 	for(i=0; i < total; i++) {
@@ -4145,7 +4146,10 @@ void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
 		}
 	    }
 	}
-    } while(more);
+    } while(more || erts_atomic32_read_nob(&lock->returns) != countervalue+1);
+    erts_atomic32_init_nob(&lock->counter, 0);
+    erts_atomic32_init_nob(&lock->returns, 1);
+
 }
 
 int db_checkqueue(Process* p, DbTable* tb, newlock_node* lock) {
