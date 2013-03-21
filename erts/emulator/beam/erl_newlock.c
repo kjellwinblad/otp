@@ -16,7 +16,7 @@ void queue_init(queue_handle* q){
     erts_atomic32_set_nob(&q->size, 0);
     q->head  =0;
     q->tail = 0;
-    q->entries = malloc(MAX_QUEUE_LENGTH * sizeof(queue_handle));
+    q->entries = malloc(MAX_QUEUE_LENGTH * sizeof(QueueEntry));
     /* // initializing the buffer is not required
     for(i = 0; i < MAX_QUEUE_LENGTH; i++) {
 	q->entries[i] = NULL;
@@ -28,23 +28,32 @@ void queue_init_padded(padded_queue_handle* q){
     q->qh.entries = malloc(MAX_QUEUE_LENGTH * sizeof(padded_queue_handle));
 }
 */
-void queue_push(queue_handle* q, void* entry) {
-    q->entries[ q->tail ] = entry;
+void queue_push(queue_handle* q, void* entry, erts_atomic32_t* cnt) {
+    q->entries[ q->tail ].value = entry;
+    q->entries[ q->tail ].ticket = erts_atomic_inc_read_mb(cnt);
+    //printf("counter %d\n\r", q->entries[ q->tail ].ticket);
     q->tail = SUCCESSOR( q->tail );
     erts_atomic32_inc_mb( &q->size );
 }
 
-void* queue_pop(queue_handle* q) {
-    void* entry;
+void* queue_pop(queue_handle* q, erts_atomic32_t* cnt) {
+    erts_aint32_t cntval = erts_atomic32_read_mb(cnt);
+    QueueEntry entry;
     
     entry = q->entries[ q->head ];
+    //printf("returns exp: %d, found: %d\n\r", cntval, entry.ticket);
+    if(entry.ticket != cntval) {
+	return NULL;
+    } else {
+	erts_atomic32_inc_mb(cnt);
+    }
     /* // clearing the buffer is not required
     q->entries[ q->head] = NULL;
     */
     q->head = SUCCESSOR( q->head );
     erts_atomic32_dec_mb( &q->size );
 
-    return (entry);
+    return (entry.value);
 }
 
 void acquire_newlock(erts_atomic_t* L, newlock_node* I) {

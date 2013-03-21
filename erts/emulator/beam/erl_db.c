@@ -4085,7 +4085,8 @@ static newlock_node* get_locknode(Process* p) {
 	(void) erts_schedulers_state(&total, &online, &active, 0);
 	n = malloc(sizeof(newlock_node));
 	erts_atomic32_init_nob(&n->locked, 0);
-	n->pass_counter = 0;
+	erts_atomic32_init_nob(&n->counter, 0);
+	erts_atomic32_init_nob(&n->returns, 1);
 	erts_atomic_init_nob(&n->next, 0);
 	n->queues = malloc(sizeof(queue_handle*)*total);
 	for(i=0; i<total; i++) {
@@ -4130,36 +4131,47 @@ static ERTS_INLINE Eterm locking_get_temporary_dbterm(DbTerm* dbterm, DbTable* t
 int db_enqueue(Process* p, DbTable* tb, Eterm entry, int type) {
     DbTerm* dbt;
     DbTableMethod* meth = tb->common.meth;
-    erts_atomic_t* lockptr = &tb->common.exclusive;
     int index = RUNQ_READ_RQ(&p->run_queue)->ix;
+    erts_atomic_t* lockptr = &tb->common.exclusive;
     newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
     queue_handle* q;
     if(thelock == NULL) return LOCK_FAIL; /* safety check: abort enqueuing if lock disappeared, TODO this might cause superfluous queue-lock-entries */
 
     q = thelock->queues[index];
     /* TODO implementation choice: enqueue if full queue, or spin for space in queue */
-    if(queue_is_full(q)) return LOCK_FAIL; /* enqueue */
+    if(queue_is_full(q, &thelock->counter)) return LOCK_FAIL; /* enqueue */
     /* while(queue_is_full(q)); */ /* spin */
     dbt = meth->db_new_dbterm(tb, entry);
-    queue_push(q, (void*) dbt);
+    queue_push(q, (void*) dbt, &thelock->counter);
     return LOCK_SUCCESS;
 }
 
 void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
-    int i;
+    int i, more;
     int cret;
     DbTableMethod* meth = tb->common.meth;
+    
+    erts_atomic_t* lockptr = &tb->common.exclusive;
+    newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
     
     /* TODO: find total more efficiently */
     Uint total, online, active;
     (void) erts_schedulers_state(&total, &online, &active, 0);
-    for(i=0; i < total; i++) {
-	queue_handle* q = lock->queues[i];
-	while(!queue_is_empty(q)) {
-	    void* dbterm = queue_pop(q);
-	    cret = meth->db_put(tb, (Eterm) dbterm, DB_PUT_DELAYED);
+    do {
+	more = 0;
+	for(i=0; i < total; i++) {
+	    queue_handle* q;
+	    q = lock->queues[i];
+	    while(!queue_is_empty(q) && more<=i) {
+		void* dbterm = queue_pop(q, &lock->returns);
+		if(!dbterm) {
+		    more = i+1;
+		} else {
+		    cret = meth->db_put(tb, (Eterm) dbterm, DB_PUT_DELAYED);
+		}
+	    }
 	}
-    }
+    } while(more);
 }
 
 int db_checkqueue(Process* p, DbTable* tb, newlock_node* lock) {
