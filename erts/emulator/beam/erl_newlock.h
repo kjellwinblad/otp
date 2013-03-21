@@ -46,7 +46,7 @@ static ERTS_INLINE uint16_t queue_size(queue_handle* q) {
 }
 
 void queue_init(queue_handle* q);
-void queue_push(queue_handle* q, void* entry, erts_atomic32_t* cnt);
+int queue_push(queue_handle* q, void* entry, erts_atomic32_t* cnt);
 void* queue_pop(queue_handle* q, erts_atomic32_t* cnt);
 
 typedef struct newlock_locknode {

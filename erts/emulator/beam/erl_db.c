@@ -350,12 +350,8 @@ static ERTS_INLINE int db_try_exclusive_lock(Process* self, DbTable* tb) {
 static ERTS_INLINE void db_exclusive_unlock(Process* self, DbTable* tb) {
     newlock_node* mynode = get_locknode(self);
     /* have real writelock, need to check queues */
-    do {
-	/* TODO: make db_dequeue check to avoid double run through queues */
-	while(db_checkqueue(self, tb, mynode) == HAS_ENTRY)
-	    db_dequeue(self, tb, mynode);
-	release_newlock(&tb->common.exclusive, mynode);
-    } while (db_checkqueue(self, tb, mynode) == HAS_ENTRY && db_try_exclusive_lock(self, tb) == LOCK_SUCCESS);
+    db_dequeue(self, tb, mynode); /* this will disable further enqueues on the same lock node */
+    release_newlock(&tb->common.exclusive, mynode);
 }
 #endif
 
@@ -4112,8 +4108,13 @@ int db_enqueue(Process* p, DbTable* tb, Eterm entry, int type) {
     if(queue_is_full(q, &thelock->counter)) return LOCK_FAIL; /* enqueue */
     /* while(queue_is_full(q)); */ /* spin */
     dbt = meth->db_new_dbterm(tb, entry);
-    queue_push(q, (void*) dbt, &thelock->counter);
-    return LOCK_SUCCESS;
+    if( queue_push(q, (void*) dbt, &thelock->counter) ) {
+	/* this case is an expensive failure */
+	meth->db_free_dbterm(tb, dbt);
+	return LOCK_FAIL;
+    } else {
+	return LOCK_SUCCESS;
+    }
 }
 
 void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
@@ -4123,7 +4124,10 @@ void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
     
     erts_atomic_t* lockptr = &tb->common.exclusive;
     newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
-    
+   
+    /* mark queue closed */
+    erts_atomic32_set_mb(&lock->counter, MAX_QUEUE_LENGTH);
+
     /* TODO: find total more efficiently */
     Uint total, online, active;
     (void) erts_schedulers_state(&total, &online, &active, 0);

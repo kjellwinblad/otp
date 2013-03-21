@@ -28,12 +28,16 @@ void queue_init_padded(padded_queue_handle* q){
     q->qh.entries = malloc(MAX_QUEUE_LENGTH * sizeof(padded_queue_handle));
 }
 */
-void queue_push(queue_handle* q, void* entry, erts_atomic32_t* cnt) {
+
+/* return 1 on queue full */
+int queue_push(queue_handle* q, void* entry, erts_atomic32_t* cnt) {
+    erts_aint32_t ticket = erts_atomic_inc_read_mb(cnt);
+    if(ticket > MAX_QUEUE_LENGTH) return 0;
     q->entries[ q->tail ].value = entry;
-    q->entries[ q->tail ].ticket = erts_atomic_inc_read_mb(cnt);
-    //printf("counter %d\n\r", q->entries[ q->tail ].ticket);
+    q->entries[ q->tail ].ticket = ticket;
     q->tail = SUCCESSOR( q->tail );
     erts_atomic32_inc_mb( &q->size );
+    return 1;
 }
 
 void* queue_pop(queue_handle* q, erts_atomic32_t* cnt) {
@@ -41,7 +45,6 @@ void* queue_pop(queue_handle* q, erts_atomic32_t* cnt) {
     QueueEntry entry;
     
     entry = q->entries[ q->head ];
-    //printf("returns exp: %d, found: %d\n\r", cntval, entry.ticket);
     if(entry.ticket != cntval) {
 	return NULL;
     } else {
