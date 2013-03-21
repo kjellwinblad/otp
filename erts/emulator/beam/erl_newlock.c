@@ -32,7 +32,7 @@ void queue_init_padded(padded_queue_handle* q){
 /* return 1 on queue full */
 int queue_push(queue_handle* q, void* entry, erts_atomic32_t* cnt) {
     erts_aint32_t ticket = erts_atomic_inc_read_mb(cnt);
-    if(ticket > MAX_QUEUE_LENGTH) return 1;
+    if(ticket < 0) return 1;
     q->entries[ q->tail ].value = entry;
     q->entries[ q->tail ].ticket = ticket;
     q->tail = SUCCESSOR( q->tail );

@@ -37,7 +37,7 @@ static ERTS_INLINE int queue_is_empty(queue_handle* q) {
 
 
 static ERTS_INLINE int queue_is_full(queue_handle* q, erts_atomic32_t* cnt) {
-    return ((erts_atomic32_read_mb(cnt) == MAX_QUEUE_LENGTH) || (erts_atomic32_read_mb(&q->size) == MAX_QUEUE_LENGTH));
+    return ((erts_atomic32_read_mb(cnt) < 0) || (erts_atomic32_read_mb(&q->size) == MAX_QUEUE_LENGTH));
 }
 
 
