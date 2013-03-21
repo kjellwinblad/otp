@@ -810,7 +810,11 @@ int db_put_hash(DbTable *tbl, Eterm obj, int mode)
     int nitems;
     int ret = DB_ERROR_NONE;
 
-    key = GETKEY(tb, tuple_val(obj));
+    if(mode == DB_PUT_DELAYED) {
+	key = GETKEY(tb, ((HashDbTerm*)obj)->dbterm.tpl);
+    } else {
+	key = GETKEY(tb, tuple_val(obj));
+    }
     hval = MAKE_HASH(key);
     lck = WLOCK_HASH(tb, hval);
     ix = hash_to_ix(tb, hval);
@@ -821,47 +825,51 @@ int db_put_hash(DbTable *tbl, Eterm obj, int mode)
 	if (b == NULL) {
 	    goto Lnew;
 	}
-	if (has_key(tb,b,key,hval)) {
-	    break;
-	}
-	bp = &b->next;
-	b = b->next;
+    if (has_key(tb,b,key,hval)) {
+	break;
     }
-    /* Key found
-    */
-    if (tb->common.status & DB_SET) {
-	HashDbTerm* bnext = b->next;
-	if (b->hvalue == INVALID_HASH) {
-	    erts_smp_atomic_inc_nob(&tb->common.nitems);
-	}
-	else if (mode == DB_PUT_KEYCLASH_CHECK) {
+    bp = &b->next;
+    b = b->next;
+}
+/* Key found
+*/
+if (tb->common.status & DB_SET) {
+    HashDbTerm* bnext = b->next;
+    if (b->hvalue == INVALID_HASH) {
+	erts_smp_atomic_inc_nob(&tb->common.nitems);
+    }
+    else if (mode == DB_PUT_KEYCLASH_CHECK) {
+	ret = DB_ERROR_BADKEY;
+	goto Ldone;
+    }
+    if(mode == DB_PUT_DELAYED) {
+	q = (HashDbTerm*) obj; /* TODO make clear in type that this is not always an Eterm */
+	/* TODO the following two lines are useless? */
+	q->next = b->next;
+	q->hvalue = b->hvalue;
+    } else {
+	q = replace_dbterm(tb, b, obj);
+    }
+    q->next = bnext;
+    q->hvalue = hval; /* In case of INVALID_HASH */
+    *bp = q;
+    goto Ldone;
+}
+else if (mode == DB_PUT_KEYCLASH_CHECK) { /* && (DB_BAG || DB_DUPLICATE_BAG) */
+    q = b;
+    do {
+	if (q->hvalue != INVALID_HASH) {
 	    ret = DB_ERROR_BADKEY;
 	    goto Ldone;
 	}
-	if(mode == DB_PUT_DELAYED) {
-	    q = (HashDbTerm*) obj; /* TODO make clear in type that this is not always an Eterm */
-	} else {
-	    q = replace_dbterm(tb, b, obj);
-	}
-	q->next = bnext;
-	q->hvalue = hval; /* In case of INVALID_HASH */
-	*bp = q;
-	goto Ldone;
-    }
-    else if (mode == DB_PUT_KEYCLASH_CHECK) { /* && (DB_BAG || DB_DUPLICATE_BAG) */
-	q = b;
-	do {
-	    if (q->hvalue != INVALID_HASH) {
-		ret = DB_ERROR_BADKEY;
-		goto Ldone;
-	    }
-	    q = q->next;
-	}while (q != NULL && has_key(tb,q,key,hval)); 	
+	q = q->next;
+    }while (q != NULL && has_key(tb,q,key,hval)); 	
     }
     else if (tb->common.status & DB_BAG) {
 	HashDbTerm** qp = bp;
 	q = b;
 	do {
+	    /* TODO DB_PUT_DELAYED case handling here */
 	    if (db_eq(&tb->common,obj,&q->dbterm)) {
 		if (q->hvalue == INVALID_HASH) {
 		    erts_smp_atomic_inc_nob(&tb->common.nitems);

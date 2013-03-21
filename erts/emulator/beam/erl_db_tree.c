@@ -613,7 +613,11 @@ static int db_put_tree(DbTable *tbl, Eterm obj, int mode)
     int dir;
     TreeDbTerm *p1, *p2, *p;
 
-    key = GETKEY(tb, tuple_val(obj));
+    if(mode == DB_PUT_DELAYED) {
+	key = GETKEY(tb, ((HashDbTerm*)obj)->dbterm.tpl);
+    } else {
+	key = GETKEY(tb, tuple_val(obj));
+    }
 
     reset_static_stack(tb);
 
@@ -644,7 +648,12 @@ static int db_put_tree(DbTable *tbl, Eterm obj, int mode)
 	    this = &((*this)->right);
 	} else if (mode != DB_PUT_KEYCLASH_CHECK) { /* Equal key and this is a set, replace. */
 	    if(mode == DB_PUT_DELAYED) {
+		TreeDbTerm* replaced = *this;
 		*this = (TreeDbTerm*) obj; /* TODO make clear in type that this is not always an Eterm */
+		/* TODO speed of this (*this)->stuff? */
+		(*this)->left = replaced->left;
+		(*this)->right = replaced->right;
+		(*this)->balance = replaced->balance;
 	    } else {
 		*this = replace_dbterm(tb, *this, obj);
 	    }
