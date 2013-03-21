@@ -4098,36 +4098,6 @@ static newlock_node* get_locknode(Process* p) {
     return n;
 }
 
-static ERTS_INLINE DbTerm * locking_make_temporary_dbterm(DbTable *tb, Eterm obj)
-{
-    DbTerm * p;
-    if (tb->common.compress) {
-	p = db_store_term_comp(&tb->common, NULL, 0, obj);
-    }   
-    else {
-	p = db_store_term(&tb->common, NULL, 0, obj);
-    }   
-    return p;
-}
-
-static ERTS_INLINE Eterm locking_get_temporary_dbterm(DbTerm* dbterm, DbTable* tbl, Process* p) {
-    Eterm copy;
-    Eterm *hp, *hend;
-    Eterm ret;
-    if(NULL == dbterm){
-	ret = NIL;
-    } else {
-	hp = HAlloc(p, dbterm->size + 2);
-	hend = hp + dbterm->size + 2;
-	copy = db_copy_object_from_ets(&tbl->common, dbterm, &hp, &MSO(p));
-	ret = CONS(hp, copy, NIL);
-	hp += 2;
-	HRelease(p,hend,hp);
-    }
-    return ret;
-}
-
-
 int db_enqueue(Process* p, DbTable* tb, Eterm entry, int type) {
     DbTerm* dbt;
     DbTableMethod* meth = tb->common.meth;
