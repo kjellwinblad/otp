@@ -844,9 +844,7 @@ if (tb->common.status & DB_SET) {
     }
     if(mode == DB_PUT_DELAYED) {
 	q = (HashDbTerm*) obj; /* TODO make clear in type that this is not always an Eterm */
-	/* TODO the following two lines are useless? */
-	q->next = b->next;
-	q->hvalue = b->hvalue;
+	free_term(tb, b);
     } else {
 	q = replace_dbterm(tb, b, obj);
     }

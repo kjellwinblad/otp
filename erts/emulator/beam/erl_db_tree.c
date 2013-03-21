@@ -654,6 +654,7 @@ static int db_put_tree(DbTable *tbl, Eterm obj, int mode)
 		(*this)->left = replaced->left;
 		(*this)->right = replaced->right;
 		(*this)->balance = replaced->balance;
+		free_term(tb, replaced);
 	    } else {
 		*this = replace_dbterm(tb, *this, obj);
 	    }
