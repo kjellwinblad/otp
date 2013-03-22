@@ -4056,6 +4056,7 @@ static void wait_ets_readers_gone(Process* self, void* current) {
     int i;
     Uint total, online, active;
     ErtsRunQueue* own = RUNQ_READ_RQ(&self->run_queue);
+    /* TODO: this might be an inefficient way to query online schedulers */
     (void) erts_schedulers_state(&total, &online, &active, 0);
     for(i=0; i<online; i++) {
 	erts_atomic_t* readerptr;
@@ -4077,15 +4078,13 @@ static newlock_node* get_locknode(Process* p) {
     newlock_node* n = (newlock_node*) erts_atomic_read_nob(lockptr);
     if( n == NULL) { /* TODO UGLY AS HELL CODE MOVE TO PROCESS INIT */
 	int i;
-	Uint total, online, active;
-	(void) erts_schedulers_state(&total, &online, &active, 0);
 	n = malloc(sizeof(newlock_node));
 	erts_atomic32_init_nob(&n->locked, 0);
 	erts_atomic32_init_nob(&n->counter, 0);
 	erts_atomic32_init_nob(&n->returns, 1);
 	erts_atomic_init_nob(&n->next, 0);
-	n->queues = malloc(sizeof(queue_handle*)*total);
-	for(i=0; i<total; i++) {
+	n->queues = malloc(sizeof(queue_handle*)*erts_no_schedulers);
+	for(i=0; i<erts_no_schedulers; i++) {
 	    n->queues[i] = malloc(sizeof(queue_handle));
 	    queue_init(n->queues[i]);
 	}
@@ -4125,16 +4124,12 @@ void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
     erts_atomic_t* lockptr = &tb->common.exclusive;
     newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
    
-    /* TODO: find total more efficiently */
-    Uint total, online, active;
-    (void) erts_schedulers_state(&total, &online, &active, 0);
-    
     /* mark queue closed */
-    erts_aint32_t countervalue = erts_atomic32_xchg_mb(&lock->counter, -total);
+    erts_aint32_t countervalue = erts_atomic32_xchg_mb(&lock->counter, -erts_no_schedulers);
 
     do {
 	more = 0;
-	for(i=0; i < total; i++) {
+	for(i=0; i < erts_no_schedulers; i++) {
 	    queue_handle* q;
 	    q = lock->queues[i];
 	    while(!queue_is_empty(q) && more<=i) {
@@ -4154,10 +4149,7 @@ void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
 
 int db_checkqueue(Process* p, DbTable* tb, newlock_node* lock) {
     int i;
-    /* TODO: find total more efficiently */
-    Uint total, online, active;
-    (void) erts_schedulers_state(&total, &online, &active, 0);
-    for(i=0; i < total; i++) {
+    for(i=0; i < erts_no_schedulers; i++) {
 	if(!queue_is_empty(lock->queues[i]))
 	    return HAS_ENTRY;
     }
