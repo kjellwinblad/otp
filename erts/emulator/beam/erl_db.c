@@ -1157,7 +1157,6 @@ BIF_RETTYPE ets_insert_2(BIF_ALIST_2)
 
     if(kind == LCK_WILLTRY) {
 	int test;
-	do {
 	if(db_trylock(BIF_P, tb) != LOCK_FAIL) goto normal_path;
 	/* lock already taken -> enqueue instead of real insert */
 	    if (is_not_tuple(BIF_ARG_2) || 
@@ -1173,7 +1172,6 @@ BIF_RETTYPE ets_insert_2(BIF_ALIST_2)
 	    if(db_trylock(BIF_P, tb) == LOCK_SUCCESS) {
 		db_unlock(BIF_P, tb, LCK_WRITE_REC);
 	    }
-	} while (test == LOCK_FAIL); // dead while
     } else {
 normal_path:
 	if(kind == LCK_WILLTRY) kind = LCK_WRITE_REC;
@@ -4080,14 +4078,8 @@ static newlock_node* get_locknode(Process* p) {
 	int i;
 	n = malloc(sizeof(newlock_node));
 	erts_atomic32_init_nob(&n->locked, 0);
-	erts_atomic32_init_nob(&n->counter, 0);
-	erts_atomic32_init_nob(&n->returns, 1);
 	erts_atomic_init_nob(&n->next, 0);
-	n->queues = malloc(sizeof(queue_handle*)*erts_no_schedulers);
-	for(i=0; i<erts_no_schedulers; i++) {
-	    n->queues[i] = malloc(sizeof(queue_handle));
-	    queue_init(n->queues[i]);
-	}
+	queue_init(&n->queue);
 	erts_atomic_set_mb(lockptr, (erts_aint_t)n);
     }
     return n;
@@ -4096,18 +4088,17 @@ static newlock_node* get_locknode(Process* p) {
 int db_enqueue(Process* p, DbTable* tb, Eterm entry, int type) {
     DbTerm* dbt;
     DbTableMethod* meth = tb->common.meth;
-    int index = RUNQ_READ_RQ(&p->run_queue)->ix;
     erts_atomic_t* lockptr = &tb->common.exclusive;
     newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
     queue_handle* q;
     if(thelock == NULL) return LOCK_FAIL; /* safety check: abort enqueuing if lock disappeared, TODO this might cause superfluous queue-lock-entries */
 
-    q = thelock->queues[index];
+    q = &thelock->queue; //s[index];
     /* TODO implementation choice: enqueue if full queue, or spin for space in queue */
-    if(queue_is_full(q, &thelock->counter)) return LOCK_FAIL; /* enqueue */
+    if(queue_is_full(q)) return LOCK_FAIL; /* enqueue */
     /* while(queue_is_full(q)); */ /* spin */
     dbt = meth->db_new_dbterm(tb, entry);
-    if( queue_push(q, (void*) dbt, &thelock->counter) ) {
+    if( queue_push(q, (void*) dbt) ) {
 	/* this case is an expensive failure */
 	meth->db_free_dbterm(tb, dbt);
 	return LOCK_FAIL;
@@ -4125,28 +4116,16 @@ void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
     newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
    
     /* mark queue closed */
-    erts_aint32_t countervalue = erts_atomic32_xchg_mb(&lock->counter, -erts_no_schedulers);
-
-    do {
-	more = 0;
-	for(i=0; i < erts_no_schedulers; i++) {
-	    queue_handle* q;
-	    q = lock->queues[i];
-	    while(!queue_is_empty(q) && more<=i) {
-		void* dbterm = queue_pop(q, &lock->returns);
-		if(!dbterm) {
-		    more = i+1;
-		} else {
-		    cret = meth->db_put(tb, (Eterm) dbterm, DB_PUT_DELAYED);
-		}
-	    }
-	}
-    } while(more || erts_atomic32_read_nob(&lock->returns) != countervalue+1);
-    erts_atomic32_init_nob(&lock->counter, 0);
-    erts_atomic32_init_nob(&lock->returns, 1);
-
+    queue_handle* q = &lock->queue;
+    erts_aint32_t last_element = erts_atomic32_xchg_mb(&lock->queue.head, -erts_no_schedulers);
+    if(last_element >= MAX_QUEUE_LENGTH) last_element = MAX_QUEUE_LENGTH-1;
+    for(i = 0; i <= last_element; i++) {
+	void* dbterm = queue_pop(q, i);
+	cret = meth->db_put(tb, (Eterm) dbterm, DB_PUT_DELAYED);
+    }
+    queue_reset(q);
 }
-
+/*
 int db_checkqueue(Process* p, DbTable* tb, newlock_node* lock) {
     int i;
     for(i=0; i < erts_no_schedulers; i++) {
@@ -4155,7 +4134,7 @@ int db_checkqueue(Process* p, DbTable* tb, newlock_node* lock) {
     }
     return HAS_NO_ENTRIES;
 }
-    
+*/  
 
 #endif
 

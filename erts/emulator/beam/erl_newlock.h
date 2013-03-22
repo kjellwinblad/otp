@@ -12,17 +12,15 @@ struct queue_entry {
     void* value;
 };
 
-typedef struct queue_entry QueueEntry;
+typedef void* QueueEntry;
 /* might also be: */
-/* typedef void* QueueEntry; */
+/* typedef struct queue_entry QueueEntry; */
 
 typedef struct {
 /*    uint16_t size; // needs to be atomic */
 /*    uint16_t capacity; // potentially needs to be atomic */
-    erts_atomic32_t size;
 /*    erts_atomic32_t capacity; */
-    uint16_t head;
-    uint16_t tail;
+    erts_atomic32_t head;
     QueueEntry* entries;
 } queue_handle;
 
@@ -31,30 +29,30 @@ typedef union {
     byte _cache_line_padding[64];
 } padded_queue_handle;
 
+/* TODO: this function should be deprecated for it is misleading */
 static ERTS_INLINE int queue_is_empty(queue_handle* q) {
-    return (erts_atomic32_read_mb(&q->size) == 0);
+    return (erts_atomic32_read_mb(&q->head) == -1);
 }
 
 
-static ERTS_INLINE int queue_is_full(queue_handle* q, erts_atomic32_t* cnt) {
-    return ((erts_atomic32_read_mb(cnt) < 0) || (erts_atomic32_read_mb(&q->size) == MAX_QUEUE_LENGTH));
+static ERTS_INLINE int queue_is_full(queue_handle* q) {
+    return (erts_atomic32_read_mb(&q->head) == MAX_QUEUE_LENGTH-1);
 }
 
 
-static ERTS_INLINE uint16_t queue_size(queue_handle* q) {
-    return erts_atomic32_read_mb(&q->size);
+static ERTS_INLINE uint32_t queue_size(queue_handle* q) {
+    return erts_atomic32_read_mb(&q->head) + 1;
 }
 
 void queue_init(queue_handle* q);
-int queue_push(queue_handle* q, void* entry, erts_atomic32_t* cnt);
-void* queue_pop(queue_handle* q, erts_atomic32_t* cnt);
+void queue_reset(queue_handle* q);
+int queue_push(queue_handle* q, void* entry);
+void* queue_pop(queue_handle* q, unsigned int idx);
 
 typedef struct newlock_locknode {
     erts_atomic32_t locked;
     erts_atomic_t next;
-    erts_atomic32_t counter;
-    erts_atomic32_t returns;
-    queue_handle** queues;
+    queue_handle queue;
 } newlock_node;
 
 void acquire_newlock(erts_atomic_t* L, newlock_node* I);

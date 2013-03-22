@@ -11,18 +11,28 @@
 
 #define SUCCESSOR(INDEX) ((INDEX+1)%MAX_QUEUE_LENGTH)
 
+/* TODO too many memory barriers */
+
 void queue_init(queue_handle* q){
     int i;
-    erts_atomic32_set_nob(&q->size, 0);
-    q->head  =0;
-    q->tail = 0;
+    erts_atomic32_init_nob(&q->head, -1);
     q->entries = malloc(MAX_QUEUE_LENGTH * sizeof(QueueEntry));
-    /* // initializing the buffer is not required
+     // initializing the buffer is now required
     for(i = 0; i < MAX_QUEUE_LENGTH; i++) {
 	q->entries[i] = NULL;
     }
-    */
+    ETHR_MEMORY_BARRIER;
 }
+
+void queue_reset(queue_handle* q) {
+    int i;
+    erts_atomic32_set_nob(&q->head, -1);
+    for(i = 0; i < MAX_QUEUE_LENGTH; i++) {
+	q->entries[i] = NULL;
+    }
+    ETHR_MEMORY_BARRIER;
+};
+    
 /*
 void queue_init_padded(padded_queue_handle* q){
     q->qh.entries = malloc(MAX_QUEUE_LENGTH * sizeof(padded_queue_handle));
@@ -30,33 +40,22 @@ void queue_init_padded(padded_queue_handle* q){
 */
 
 /* return 1 on queue full */
-int queue_push(queue_handle* q, void* entry, erts_atomic32_t* cnt) {
-    erts_aint32_t ticket = erts_atomic_inc_read_mb(cnt);
-    if(ticket < 0) return 1;
-    q->entries[ q->tail ].value = entry;
-    q->entries[ q->tail ].ticket = ticket;
-    q->tail = SUCCESSOR( q->tail );
-    erts_atomic32_inc_mb( &q->size );
+int queue_push(queue_handle* q, void* entry) {
+    erts_aint32_t myhead = erts_atomic32_inc_read_mb(&q->head);
+    if((myhead >= MAX_QUEUE_LENGTH) || (myhead < 0)) return 1;
+    q->entries[ myhead ] = entry;
+    ETHR_MEMORY_BARRIER;
     return 0;
 }
 
-void* queue_pop(queue_handle* q, erts_atomic32_t* cnt) {
-    erts_aint32_t cntval = erts_atomic32_read_mb(cnt);
+void* queue_pop(queue_handle* q, unsigned int idx) {
     QueueEntry entry;
-    
-    entry = q->entries[ q->head ];
-    if(entry.ticket != cntval) {
-	return NULL;
-    } else {
-	erts_atomic32_inc_mb(cnt);
-    }
-    /* // clearing the buffer is not required
-    q->entries[ q->head] = NULL;
-    */
-    q->head = SUCCESSOR( q->head );
-    erts_atomic32_dec_mb( &q->size );
+    do {
+	entry = q->entries[ idx ];
+	ETHR_MEMORY_BARRIER;
+    } while(!entry); /* spin */
 
-    return (entry.value);
+    return entry;
 }
 
 void acquire_newlock(erts_atomic_t* L, newlock_node* I) {
