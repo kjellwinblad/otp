@@ -4117,7 +4117,7 @@ void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
    
     /* mark queue closed */
     queue_handle* q = &lock->queue;
-    erts_aint32_t last_element = erts_atomic32_xchg_mb(&lock->queue.head, -erts_no_schedulers);
+    erts_aint32_t last_element = erts_atomic32_xchg_mb(&lock->queue.head, -32000);
     if(last_element >= MAX_QUEUE_LENGTH) last_element = MAX_QUEUE_LENGTH-1;
     for(i = 0; i <= last_element; i++) {
 	void* dbterm = queue_pop(q, i);

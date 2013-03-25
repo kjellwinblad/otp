@@ -13,7 +13,7 @@
 
 /* TODO too many memory barriers */
 
-void queue_init(queue_handle* q){
+void queue_init(queue_handle* q) {
     int i;
     erts_atomic32_init_nob(&q->head, -1);
     q->entries = malloc(MAX_QUEUE_LENGTH * sizeof(QueueEntry));
@@ -27,9 +27,12 @@ void queue_init(queue_handle* q){
 void queue_reset(queue_handle* q) {
     int i;
     erts_atomic32_set_nob(&q->head, -1);
+    /* re-initialization is necessary, either here or in queue_pop */
+    /*
     for(i = 0; i < MAX_QUEUE_LENGTH; i++) {
 	q->entries[i] = NULL;
     }
+    */
     ETHR_MEMORY_BARRIER;
 };
     
@@ -44,16 +47,18 @@ int queue_push(queue_handle* q, void* entry) {
     erts_aint32_t myhead = erts_atomic32_inc_read_mb(&q->head);
     if((myhead >= MAX_QUEUE_LENGTH) || (myhead < 0)) return 1;
     q->entries[ myhead ] = entry;
-    ETHR_MEMORY_BARRIER;
+    /* ETHR_MEMORY_BARRIER; // is this required? */
     return 0;
 }
 
 void* queue_pop(queue_handle* q, unsigned int idx) {
     QueueEntry entry;
-    do {
+    entry = q->entries[ idx ];
+    while(!entry) { /* spin */
 	entry = q->entries[ idx ];
 	ETHR_MEMORY_BARRIER;
-    } while(!entry); /* spin */
+    }
+    q->entries[ idx ] = NULL;
 
     return entry;
 }
