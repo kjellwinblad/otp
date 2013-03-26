@@ -4,8 +4,9 @@
 #include<stdint.h>
 
 /* values preliminary */
-#define MAX_QUEUE_LENGTH 16384
+#define MAX_QUEUE_LENGTH 3276
 #define MAX_PASSES 256
+#define NUM_OF_QUEUES 5
 
 struct queue_entry {
     uint32_t ticket;
@@ -52,7 +53,7 @@ void* queue_pop(queue_handle* q, unsigned int idx);
 typedef struct newlock_locknode {
     erts_atomic32_t locked;
     erts_atomic_t next;
-    queue_handle queue;
+    queue_handle queues[NUM_OF_QUEUES];
 } newlock_node;
 
 void acquire_newlock(erts_atomic_t* L, newlock_node* I);

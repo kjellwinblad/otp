@@ -2998,6 +2998,7 @@ void init_db(void)
     size_t size;
 
 #ifdef ERTS_SMP
+
     erts_smp_rwmtx_opt_t rwmtx_opt = ERTS_SMP_RWMTX_OPT_DEFAULT_INITER;
     rwmtx_opt.type = ERTS_SMP_RWMTX_TYPE_FREQUENT_READ;
     rwmtx_opt.lived = ERTS_SMP_RWMTX_LONG_LIVED;
@@ -4079,11 +4080,17 @@ static newlock_node* get_locknode(Process* p) {
 	n = malloc(sizeof(newlock_node));
 	erts_atomic32_init_nob(&n->locked, 0);
 	erts_atomic_init_nob(&n->next, 0);
-	queue_init(&n->queue);
+	for(i = 0; i < NUM_OF_QUEUES ; i++){
+            queue_init(&n->queues[i]);
+        }
 	erts_atomic_set_mb(lockptr, (erts_aint_t)n);
     }
     return n;
 }
+
+
+#define MAKE_HASH_LOCK(term) \
+    (make_hash2(term) % NUM_OF_QUEUES)
 
 int db_enqueue(Process* p, DbTable* tb, Eterm entry, int type) {
     DbTerm* dbt;
@@ -4091,9 +4098,14 @@ int db_enqueue(Process* p, DbTable* tb, Eterm entry, int type) {
     erts_atomic_t* lockptr = &tb->common.exclusive;
     newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
     queue_handle* q;
+    int index = MAKE_HASH_LOCK(GETKEY(tb, tuple_val(entry)));
+
     if(thelock == NULL) return LOCK_FAIL; /* safety check: abort enqueuing if lock disappeared, TODO this might cause superfluous queue-lock-entries */
 
-    q = &thelock->queue; //s[index];
+
+
+
+    q = &thelock->queues[index]; //s[index];
     /* TODO implementation choice: enqueue if full queue, or spin for space in queue */
     if(queue_is_full(q)) return LOCK_FAIL; /* enqueue */
     /* while(queue_is_full(q)); */ /* spin */
@@ -4108,7 +4120,7 @@ int db_enqueue(Process* p, DbTable* tb, Eterm entry, int type) {
 }
 
 void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
-    int i, more;
+    int i, n, more;
     int cret;
     DbTableMethod* meth = tb->common.meth;
     
@@ -4116,14 +4128,16 @@ void db_dequeue(Process* p, DbTable* tb, newlock_node* lock) {
     newlock_node* thelock = (newlock_node*) erts_atomic_read_nob(lockptr);
    
     /* mark queue closed */
-    queue_handle* q = &lock->queue;
-    erts_aint32_t last_element = erts_atomic32_xchg_mb(&lock->queue.head, -32000);
-    if(last_element >= MAX_QUEUE_LENGTH) last_element = MAX_QUEUE_LENGTH-1;
-    for(i = 0; i <= last_element; i++) {
-	void* dbterm = queue_pop(q, i);
-	cret = meth->db_put(tb, (Eterm) dbterm, DB_PUT_DELAYED);
+    for(n = 0; n < NUM_OF_QUEUES ; n++){
+        queue_handle* q = &lock->queues[n];
+        erts_aint32_t last_element = erts_atomic32_xchg_mb(&lock->queues[n].head, -32000);
+        if(last_element >= MAX_QUEUE_LENGTH) last_element = MAX_QUEUE_LENGTH-1;
+        for(i = 0; i <= last_element; i++) {
+            void* dbterm = queue_pop(q, i);
+            cret = meth->db_put(tb, (Eterm) dbterm, DB_PUT_DELAYED);
+        }
+        queue_reset(q);
     }
-    queue_reset(q);
 }
 /*
 int db_checkqueue(Process* p, DbTable* tb, newlock_node* lock) {
