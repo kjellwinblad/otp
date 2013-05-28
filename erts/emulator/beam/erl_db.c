@@ -1411,6 +1411,11 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
     }
     else if (IS_GENERIC_INTERFACE_TABLE(status)) {
 	meth = &db_generic_interface;
+#ifdef ERTS_SMP
+	if (is_fine_locked && !(status & DB_PRIVATE)) {
+	    status |= DB_FINE_LOCKED;
+	}
+#endif
     }
     else {
 	BIF_ERROR(BIF_P, BADARG);

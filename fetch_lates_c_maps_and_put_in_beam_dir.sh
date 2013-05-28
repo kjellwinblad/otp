@@ -6,5 +6,14 @@ rm -rf c_maps
 
 git clone git://github.com/kjellwinblad/c_maps.git
 
-cp c_maps/*.c $BEAM_DIR
-cp c_maps/*.h $BEAM_DIR
+cd c_maps
+
+git checkout -b concurrent_structure origin/concurrent_structure
+
+cd ..
+
+cp c_maps/src/maps/*.c $BEAM_DIR
+cp c_maps/src/maps/*.h $BEAM_DIR
+
+cp c_maps/src/utils/*.c $BEAM_DIR
+cp c_maps/src/utils/*.h $BEAM_DIR
