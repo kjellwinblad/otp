@@ -1,4 +1,3 @@
-
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
@@ -168,7 +167,6 @@ static void generic_interface_free(void *);
 
 //Function declarations
 void db_initialize_generic_interface(){
-    printf("INIT KVSET\n");
     kvset_init();
 }
 
