@@ -14,7 +14,7 @@
 #include "big.h"
 #include "export.h"
 #include "erl_binary.h"
-#include "skiplist.h"
+#include "concurrent_skiplist.h"
 
 
 #include "erl_debug.h"
