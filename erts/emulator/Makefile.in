@@ -741,7 +741,7 @@ RUN_OBJS = \
 	$(OBJDIR)/erl_bif_binary.o      $(OBJDIR)/erl_ao_firstfit_alloc.o \
 	$(OBJDIR)/erl_thr_queue.o	$(OBJDIR)/erl_sched_spec_pre_alloc.o \
 	$(OBJDIR)/erl_ptab.o		$(OBJDIR)/erl_db_generic_interface.o \
-	$(OBJDIR)/skiplist.o
+	$(OBJDIR)/concurrent_skiplist.o $(OBJDIR)/hazard_pointers.o
 
 ifeq ($(TARGET),win32)
 DRV_OBJS = \
