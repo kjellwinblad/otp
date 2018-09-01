@@ -1,4 +1,4 @@
-%%
+ %%
 %% %CopyrightBegin%
 %%
 %% Copyright Ericsson AB 1996-2018. All Rights Reserved.
@@ -66,7 +66,7 @@
 	 meta_lookup_named_read/1, meta_lookup_named_write/1,
 	 meta_newdel_unnamed/1, meta_newdel_named/1]).
 -export([smp_insert/1, smp_fixed_delete/1, smp_unfix_fix/1, smp_select_delete/1,
-         smp_select_replace/1, otp_8166/1, otp_8732/1]).
+         smp_select_replace/1, otp_8166/1, otp_8732/1, test_concurrent_insert_remove_select/1]).
 -export([exit_large_table_owner/1,
 	 exit_many_large_table_owner/1,
 	 exit_many_tables_owner/1,
@@ -142,7 +142,8 @@ all() ->
      ets_all,
      massive_ets_all,
      take,
-     whereis_table].
+     whereis_table,
+     test_concurrent_insert_remove_select].
 
 groups() ->
     [{new, [],
@@ -5488,6 +5489,36 @@ smp_fixed_delete_do() ->
     %%Mem = ets:info(T,memory),
     %%verify_table_load(T),
     ets:delete(T).
+
+test_cirs_helper(Parent, _Table, _Op, 0) ->
+    Parent ! ok;
+test_cirs_helper(Parent, Table, Op, Left) ->
+    Op(),
+    test_cirs_helper(Parent, Table, Op, Left - 1) .
+
+test_concurrent_insert_remove_select(Config) when is_list(Config) ->
+    EtsMem = etsmem(),
+    Table = ets:new(t,[set,public,{write_concurrency,true}]),
+    InsertOp =
+        fun() -> 
+                ets:insert(Table, {rand:uniform(10)})
+        end,
+    DeleteOp =
+        fun() -> 
+                ets:delete(Table, rand:uniform(10))
+        end,
+    SelectOp =
+        fun() -> 
+                ets:select_count(Table, ets:fun2ms(fun(X) -> true end))
+        end,
+    InsertOp(),DeleteOp(),
+    Main = self(),
+    spawn(fun()-> test_cirs_helper(Main, Table, InsertOp, 100000) end),
+    spawn(fun()-> test_cirs_helper(Main, Table, DeleteOp, 100000) end),
+    spawn(fun()-> test_cirs_helper(Main, Table, SelectOp, 100000) end),
+    lists:foreach(fun(_) -> (receive ok -> ok end) end, lists:seq(1,3)),
+    ets:delete(Table),
+    verify_etsmem(EtsMem).
 
 num_of_buckets(T) ->
     element(1,ets:info(T,stats)).
