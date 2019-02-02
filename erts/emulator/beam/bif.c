@@ -2436,7 +2436,7 @@ static int iolist_size_ctx_bin_dtor(Binary *context_bin) {
 
 BIF_RETTYPE iolist_size_1(BIF_ALIST_1)
 {
-    static const Uint ITERATIONS_PER_RED = 60;
+    static const Uint ITERATIONS_PER_RED = 64;
     Eterm input_list, obj, hd;
     Eterm* objp;
     Uint size = 0;
