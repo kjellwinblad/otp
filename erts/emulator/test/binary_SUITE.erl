@@ -40,6 +40,7 @@
 %%
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("common_test/include/ct_event.hrl").
 
 -export([all/0, suite/0,groups/0,init_per_suite/1, end_per_suite/1, 
 	 init_per_group/2,end_per_group/2, 
@@ -50,7 +51,12 @@
 	 terms/1, terms_float/1, float_middle_endian/1,
          b2t_used_big/1,
 	 external_size/1, t_iolist_size/1,
-         t_iolist_size_trapping/1,
+         t_iolist_size_shallow_trapping/1,
+         t_iolist_size_shallow_short_lists/1,
+         t_iolist_size_shallow_tiny_lists/1,
+         t_iolist_size_deep_trapping/1,
+         t_iolist_size_deep_short_lists/1,
+         t_iolist_size_deep_tiny_lists/1,
 	 t_hash/1,
 	 bad_size/1,
 	 bad_term_to_binary/1,
@@ -76,7 +82,12 @@ all() ->
      t_split_binary, bad_split,
      bad_list_to_binary, bad_binary_to_list, terms,
      terms_float, float_middle_endian, external_size, t_iolist_size,
-     t_iolist_size_trapping,
+     t_iolist_size_shallow_trapping,
+     t_iolist_size_shallow_short_lists,
+     t_iolist_size_shallow_tiny_lists,
+     t_iolist_size_deep_trapping,
+     t_iolist_size_deep_short_lists,
+     t_iolist_size_deep_tiny_lists,
      b2t_used_big,
      bad_binary_to_term_2, safe_binary_to_term2,
      bad_binary_to_term, bad_terms, t_hash, bad_size,
@@ -617,17 +628,34 @@ build_iolist(N0, Base) ->
 	    [47,L,L|Seq]
     end.
 
-%% Test scenarios where iolist_size/1 yields
-t_iolist_size_trapping(Config) when is_list(Config) ->
+%% iolist_size tests for shallow lists
+
+t_iolist_size_shallow_trapping(Config) when is_list(Config) ->
+    Lengths = [2000, 20000, 200000, 200000, 2000000],
+    report_throughput(
+      fun() -> iolist_size_shallow(Lengths) end,
+      lists:sum(Lengths)*4).
+
+t_iolist_size_shallow_short_lists(Config) when is_list(Config) ->
+    Lengths = lists:duplicate(10000, 300),
+    report_throughput(
+      fun() -> iolist_size_shallow(Lengths) end,
+      lists:sum(Lengths)*4).
+
+t_iolist_size_shallow_tiny_lists(Config) when is_list(Config) ->
+    Lengths = lists:duplicate(100000, 18),
+    report_throughput(
+      fun() -> iolist_size_shallow(Lengths) end,
+      lists:sum(Lengths)*4).
+
+iolist_size_shallow(Lengths) ->
     lists:foreach(
       fun(N) ->
               ExpectedResult = N * 2,
               ExpectedResult = iolist_size(make_shallow_iolist(N, 1)),
-              ExpectedResult = iolist_size(make_deep_iolist(N, 1)),
-              {'EXIT',_} = (catch (iolist_size(make_shallow_iolist(N, bad)))),
-              {'EXIT',_} = (catch (iolist_size(make_deep_iolist(N, bad))))
+              {'EXIT',_} = (catch (iolist_size(make_shallow_iolist(N, bad))))
       end,
-      [2000, 20000, 200000, 200000, 2000000]).
+      Lengths).
 
 make_shallow_iolist(SizeDiv2, LastItem) ->
     lists:map(
@@ -639,10 +667,47 @@ make_shallow_iolist(SizeDiv2, LastItem) ->
       end,
       lists:seq(1, SizeDiv2)).
 
+%% iolist_size tests for deep lists
+
+t_iolist_size_deep_trapping(Config) when is_list(Config) ->
+    Lengths = [2000, 20000, 200000, 200000, 2000000],
+    report_throughput(
+      fun() -> iolist_size_deep(Lengths) end,
+      lists:sum(Lengths)*4).
+
+t_iolist_size_deep_short_lists(Config) when is_list(Config) ->
+    Lengths = lists:duplicate(10000, 300),
+    report_throughput(
+      fun() -> iolist_size_deep(Lengths) end,
+      lists:sum(Lengths)*4).
+
+t_iolist_size_deep_tiny_lists(Config) when is_list(Config) ->
+    Lengths = lists:duplicate(100000, 18),  
+    report_throughput(
+      fun() -> iolist_size_deep(Lengths) end,
+      lists:sum(Lengths)*4).
+
+iolist_size_deep(Lengths) ->
+    lists:foreach(
+      fun(N) ->
+              ExpectedResult = N * 2,
+              ExpectedResult = iolist_size(make_deep_iolist(N, 1)),
+              {'EXIT',_} = (catch (iolist_size(make_deep_iolist(N, bad))))
+      end,
+      Lengths).
+
 make_deep_iolist(1, LastItem) ->
     [1, LastItem];
 make_deep_iolist(Depth, LastItem) ->
     [[1, 1], make_deep_iolist(Depth - 1, LastItem)].
+
+
+
+report_throughput(Fun, NrOfItems) ->
+    {Time, _} = timer:tc(Fun),
+    ItemsPerMicrosecond = NrOfItems / Time,
+    ct_event:notify(#event{ name = benchmark_data, data = [{value, ItemsPerMicrosecond}]}),
+    {comment, io_lib:format("Items per microsecond: ~p", [ItemsPerMicrosecond])}.
 
 
 %% OTP-4053

@@ -2450,6 +2450,10 @@ BIF_RETTYPE iolist_size_1(BIF_ALIST_1)
     ErtsIOListSizeContext* context = NULL;
     Eterm state_mref;
     int is_trap_at_L_iter_list;
+    ESTACK_CHANGE_ALLOCATOR(s, ERTS_ALC_T_SAVED_ESTACK);
+#ifdef DEBUG
+    iterations_until_trap = iterations_until_trap / 10;
+#endif
     input_list = obj = BIF_ARG_1;
     if (is_internal_magic_ref(obj)) {
         /* Restore state after a trap */
