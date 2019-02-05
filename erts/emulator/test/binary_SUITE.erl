@@ -82,12 +82,7 @@ all() ->
      t_split_binary, bad_split,
      bad_list_to_binary, bad_binary_to_list, terms,
      terms_float, float_middle_endian, external_size, t_iolist_size,
-     t_iolist_size_shallow_trapping,
-     t_iolist_size_shallow_short_lists,
-     t_iolist_size_shallow_tiny_lists,
-     t_iolist_size_deep_trapping,
-     t_iolist_size_deep_short_lists,
-     t_iolist_size_deep_tiny_lists,
+     {group, iolist_size_benchmarks},
      b2t_used_big,
      bad_binary_to_term_2, safe_binary_to_term2,
      bad_binary_to_term, bad_terms, t_hash, bad_size,
@@ -99,7 +94,19 @@ all() ->
      error_after_yield, cmp_old_impl].
 
 groups() -> 
-    [].
+    [
+     {
+      iolist_size_benchmarks, 
+      [],
+      [t_iolist_size_shallow_trapping,
+       t_iolist_size_shallow_short_lists,
+       t_iolist_size_shallow_tiny_lists,
+       t_iolist_size_deep_trapping,
+       t_iolist_size_deep_short_lists,
+       t_iolist_size_deep_tiny_lists
+      ]
+     }
+    ].
 
 init_per_suite(Config) ->
     Config.
@@ -663,7 +670,7 @@ t_iolist_size_deep_short_lists(Config) when is_list(Config) ->
     run_iolist_size_test_and_benchmark(Lengths, fun make_deep_iolist/2).
 
 t_iolist_size_deep_tiny_lists(Config) when is_list(Config) ->
-    Lengths = lists:duplicate(100000, 18),  
+    Lengths = lists:duplicate(100000, 18),
     run_iolist_size_test_and_benchmark(Lengths, fun make_deep_iolist/2).
 
 make_deep_iolist(1, LastItem) ->
@@ -693,7 +700,8 @@ report_throughput(Fun, NrOfItems) ->
     {Time, _} = timer:tc(Fun),
     ItemsPerMicrosecond = NrOfItems / Time,
     ct_event:notify(#event{ name = benchmark_data, data = [{value, ItemsPerMicrosecond}]}),
-    {comment, io_lib:format("Items per microsecond: ~p", [ItemsPerMicrosecond])}.
+    {comment, io_lib:format("Items per microsecond: ~p, Nr of items: ~p, Benchmark time: ~p seconds)",
+                            [ItemsPerMicrosecond, NrOfItems, Time/1000000])}.
 
 
 %% OTP-4053
