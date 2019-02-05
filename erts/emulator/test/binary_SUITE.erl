@@ -632,30 +632,15 @@ build_iolist(N0, Base) ->
 
 t_iolist_size_shallow_trapping(Config) when is_list(Config) ->
     Lengths = [2000, 20000, 200000, 200000, 2000000],
-    report_throughput(
-      fun() -> iolist_size_shallow(Lengths) end,
-      lists:sum(Lengths)*4).
+    run_iolist_size_test_and_benchmark(Lengths, fun make_shallow_iolist/2).
 
 t_iolist_size_shallow_short_lists(Config) when is_list(Config) ->
     Lengths = lists:duplicate(10000, 300),
-    report_throughput(
-      fun() -> iolist_size_shallow(Lengths) end,
-      lists:sum(Lengths)*4).
+    run_iolist_size_test_and_benchmark(Lengths, fun make_shallow_iolist/2).
 
 t_iolist_size_shallow_tiny_lists(Config) when is_list(Config) ->
     Lengths = lists:duplicate(100000, 18),
-    report_throughput(
-      fun() -> iolist_size_shallow(Lengths) end,
-      lists:sum(Lengths)*4).
-
-iolist_size_shallow(Lengths) ->
-    lists:foreach(
-      fun(N) ->
-              ExpectedResult = N * 2,
-              ExpectedResult = iolist_size(make_shallow_iolist(N, 1)),
-              {'EXIT',_} = (catch (iolist_size(make_shallow_iolist(N, bad))))
-      end,
-      Lengths).
+    run_iolist_size_test_and_benchmark(Lengths, fun make_shallow_iolist/2).
 
 make_shallow_iolist(SizeDiv2, LastItem) ->
     lists:map(
@@ -671,37 +656,38 @@ make_shallow_iolist(SizeDiv2, LastItem) ->
 
 t_iolist_size_deep_trapping(Config) when is_list(Config) ->
     Lengths = [2000, 20000, 200000, 200000, 2000000],
-    report_throughput(
-      fun() -> iolist_size_deep(Lengths) end,
-      lists:sum(Lengths)*4).
+    run_iolist_size_test_and_benchmark(Lengths, fun make_deep_iolist/2).
 
 t_iolist_size_deep_short_lists(Config) when is_list(Config) ->
     Lengths = lists:duplicate(10000, 300),
-    report_throughput(
-      fun() -> iolist_size_deep(Lengths) end,
-      lists:sum(Lengths)*4).
+    run_iolist_size_test_and_benchmark(Lengths, fun make_deep_iolist/2).
 
 t_iolist_size_deep_tiny_lists(Config) when is_list(Config) ->
     Lengths = lists:duplicate(100000, 18),  
-    report_throughput(
-      fun() -> iolist_size_deep(Lengths) end,
-      lists:sum(Lengths)*4).
-
-iolist_size_deep(Lengths) ->
-    lists:foreach(
-      fun(N) ->
-              ExpectedResult = N * 2,
-              ExpectedResult = iolist_size(make_deep_iolist(N, 1)),
-              {'EXIT',_} = (catch (iolist_size(make_deep_iolist(N, bad))))
-      end,
-      Lengths).
+    run_iolist_size_test_and_benchmark(Lengths, fun make_deep_iolist/2).
 
 make_deep_iolist(1, LastItem) ->
     [1, LastItem];
 make_deep_iolist(Depth, LastItem) ->
     [[1, 1], make_deep_iolist(Depth - 1, LastItem)].
 
+% Helper functions for iolist_size tests
 
+run_iolist_size_test_and_benchmark(Lengths, ListGenerator) ->
+    GoodListsWithSizes =
+        lists:map(fun(Length) -> {Length*2, ListGenerator(Length, 1)} end, Lengths),
+    BadListsWithSizes =
+        lists:map(fun(Length) -> {Length*2, ListGenerator(Length, bad)} end, Lengths),
+    report_throughput(
+      fun() ->
+              lists:foreach(
+                fun({Size, List}) -> Size = iolist_size(List) end,
+                GoodListsWithSizes),
+              lists:foreach(
+                fun({_, List}) -> {'EXIT',_} = (catch (iolist_size(List))) end,
+                BadListsWithSizes)
+      end,
+      lists:sum(Lengths)*4).
 
 report_throughput(Fun, NrOfItems) ->
     {Time, _} = timer:tc(Fun),
