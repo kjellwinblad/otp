@@ -33,7 +33,21 @@
 -module(hash_SUITE).
 -export([basic_test/0,cmp_test/1,range_test/0,spread_test/1,
 	 phash2_test/0, otp_5292_test/0,
-         otp_7127_test/0]).
+         otp_7127_test/0, 
+         run_phash2_benchmarks/0,
+         test_phash2_shallow_long_list/1,
+         test_phash2_deep_list/1,
+         test_phash2_deep_tuple/1,
+         test_phash2_deep_tiny/1,
+         test_phash2_with_42/1,
+         test_phash2_with_short_tuple/1,
+         test_phash2_with_short_list/1,
+         test_phash2_with_tiny_bin/1,
+         test_phash2_with_tiny_unaligned_sub_binary/1,
+         test_phash2_with_small_unaligned_sub_binary/1,
+         test_phash2_with_large_bin/1,
+         test_phash2_with_large_unaligned_sub_binary/1,
+         test_phash2_with_super_large_unaligned_sub_binary/1]).
 
 %%
 %% Define to run outside of test server
@@ -43,13 +57,15 @@
 %%
 %% Define for debug output
 %%
-%-define(debug,1).
+-define(debug,1).
 
 -ifdef(STANDALONE).
 -define(config(A,B),config(A,B)).
+-record(event, {name, data}).
 -export([config/2]).
 -else.
 -include_lib("common_test/include/ct.hrl").
+-include_lib("common_test/include/ct_event.hrl").
 -endif.
 
 -ifdef(debug).
@@ -67,12 +83,14 @@
 -ifdef(STANDALONE).
 config(priv_dir,_) ->
     ".".
+notify(X) -> 
+    erlang:display(X).
 -else.
 %% When run in test server.
--export([all/0, suite/0,
+-export([groups/0, all/0, suite/0,
 	 test_basic/1,test_cmp/1,test_range/1,test_spread/1,
 	 test_phash2/1,otp_5292/1,bit_level_binaries/1,otp_7127/1,
-         test_hash_zero/1]).
+         test_hash_zero/1, init_per_group/2, end_per_group/2]).
 
 suite() ->
     [{ct_hooks,[ts_install_cth]},
@@ -81,7 +99,48 @@ suite() ->
 all() -> 
     [test_basic, test_cmp, test_range, test_spread,
      test_phash2, otp_5292, bit_level_binaries, otp_7127,
-     test_hash_zero].
+     test_hash_zero, {group, phash2_benchmark_tests},
+     {group, phash2_benchmark}].
+
+get_phash2_benchmarks() ->
+    [
+     test_phash2_shallow_long_list,
+     test_phash2_deep_list,
+     test_phash2_deep_tuple,
+     test_phash2_deep_tiny,
+     test_phash2_with_42,
+     test_phash2_with_short_tuple,
+     test_phash2_with_short_list,
+     test_phash2_with_tiny_bin,
+     test_phash2_with_tiny_unaligned_sub_binary,
+     test_phash2_with_small_unaligned_sub_binary,
+     test_phash2_with_large_bin,
+     test_phash2_with_large_unaligned_sub_binary,
+     test_phash2_with_super_large_unaligned_sub_binary
+    ].
+
+groups() -> 
+    [
+     {
+      phash2_benchmark_tests,
+      [],
+      get_phash2_benchmarks()
+     },
+     {
+      phash2_benchmark,
+      [],
+      get_phash2_benchmarks()
+     }
+    ].
+
+init_per_group(phash2_benchmark_tests, Config) ->
+    [phash2_benchmark_tests |Config];
+init_per_group(_, Config) ->
+    Config.
+
+end_per_group(_, Config) ->
+    Config.
+
 
 %% Tests basic functionality of erlang:phash and that the
 %% hashes has not changed (neither hash nor phash)
@@ -119,6 +178,9 @@ otp_7127(Config) when is_list(Config) ->
 
 test_hash_zero(Config) when is_list(Config) ->
     hash_zero_test().
+
+notify(X) ->
+    ct_event:notify(X).
 -endif.
 
 
@@ -354,6 +416,7 @@ phash2_test() ->
 
 	 %% bit-level binaries
 	 {<<0:7>>, 1055790816},
+	 {(fun()-> B = <<255,7:3>>, <<_:4,D/bitstring>> = B, D end)(), 911751529},
 	 {<<"abc",13:4>>, 670412287},
 	 {<<5:3,"12345678901234567890">>, 289973273},
 
@@ -684,3 +747,245 @@ unaligned_sub_bitstr(Bin0) when is_bitstring(Bin0) ->
 
 id(I) -> I.
     
+
+%% Benchmarks for phash2
+
+run_phash2_benchmarks() ->
+    Benchmarks = [
+                  test_phash2_shallow_long_list,
+                  test_phash2_deep_list,
+                  test_phash2_deep_tuple,
+                  test_phash2_deep_tiny,
+                  test_phash2_with_42,
+                  test_phash2_with_short_tuple,
+                  test_phash2_with_short_list,
+                  test_phash2_with_tiny_bin,
+                  test_phash2_with_tiny_unaligned_sub_binary,
+                  test_phash2_with_small_unaligned_sub_binary,
+                  test_phash2_with_large_bin,
+                  test_phash2_with_large_unaligned_sub_binary,
+                  test_phash2_with_super_large_unaligned_sub_binary
+                 ],
+    [print_comment(B) || B <- Benchmarks].
+
+
+print_comment(FunctionName) ->
+    io:format("~p~n", [FunctionName]),
+    io:format("~s~n", [element(2, erlang:apply(?MODULE, FunctionName, [[]]))]).
+
+nr_of_iters(BenchmarkNumberOfIterations, Config) ->
+    case lists:member(phash2_benchmark_tests, Config) of
+        true -> 1;
+        false -> BenchmarkNumberOfIterations
+    end.
+                     
+
+test_phash2_shallow_long_list(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(1, Config), 
+                                  lists:duplicate(1000000,get_complex_tuple()),
+                                  78700388).
+
+test_phash2_deep_list(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(1, Config),
+                                  make_deep_list(500000, get_complex_tuple()),
+                                  17986444).
+
+test_phash2_deep_tuple(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(1, Config),
+                                  make_deep_tuple(500000, get_complex_tuple()),
+                                  116594715).
+
+test_phash2_deep_tiny(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(1000000, Config),
+                                  make_deep_list(19, 42),
+                                  111589624).
+
+test_phash2_with_42(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(20000000, Config),
+                                  42,
+                                  30328728).
+
+test_phash2_with_short_tuple(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(10000000, Config),
+                                  {a,b,<<"hej">>, "hej"},
+                                  50727199).
+
+test_phash2_with_short_list(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(10000000, Config),
+                                  {a,b,"hej", "hello"},
+                                  60232670).
+
+test_phash2_with_tiny_bin(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(20000000, Config),
+                                  make_random_bin(10),
+                                  129616602).
+
+test_phash2_with_tiny_unaligned_sub_binary(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(10000000, Config),
+                                  make_unaligned_sub_binary(make_random_bin(11)),
+                                  59364725).
+
+test_phash2_with_small_unaligned_sub_binary(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(400000, Config),
+                                  make_unaligned_sub_binary(make_random_bin(1001)),
+                                  130388119).
+
+test_phash2_with_large_bin(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(150, Config),
+                                  make_random_bin(10000000),
+                                  48249379).
+
+test_phash2_with_large_unaligned_sub_binary(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(50, Config),
+                                  make_unaligned_sub_binary(make_random_bin(10000001)),
+                                  122836437).
+
+test_phash2_with_super_large_unaligned_sub_binary(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(20, Config),
+                                  make_unaligned_sub_binary(make_random_bin(20000001)),
+                                  112086727).
+    
+
+% This breaks the debug emulator make_random_bin(100000001)
+
+make_deep_list(1, Item) ->
+    {Item, Item};
+make_deep_list(Depth, Item) ->
+    [{Item, Item}, make_deep_list(Depth - 1, Item)].
+
+make_deep_tuple(1, Item) ->
+    [Item, Item];
+make_deep_tuple(Depth, Item) ->
+    {[Item, Item], make_deep_tuple(Depth - 1, Item)}.
+
+% Helper functions for benchmarking
+
+loop(0, _) -> ok;
+loop(Iterations, Fun) ->
+    Fun(),
+    loop(Iterations - 1, Fun).
+
+run_phash2_test_and_benchmark(Iterations, Term, ExpectedHash) ->
+    Parent = self(),
+    Test =
+        fun() ->
+                Hash = erlang:phash2(Term),
+                case ExpectedHash =:= Hash of
+                    false -> 
+                        Parent ! {got_bad_hash, Hash},
+                        ExpectedHash = Hash;
+                    _ -> ok
+                end
+        end,
+    Benchmark =
+        fun() ->
+                garbage_collect(),
+                {Time, _} =timer:tc(fun() -> loop(Iterations, Test) end),
+                Parent ! Time
+        end,
+    spawn(Benchmark),
+    receive
+        {got_bad_hash, Hash} ->
+            ExpectedHash = Hash;
+        Time ->
+            TimeInS = case (Time/1000000) of
+                          0.0 -> 0.0000000001;
+                          T -> T
+                      end,
+            IterationsPerSecond = Iterations / TimeInS,
+            notify(#event{ name = benchmark_data, data = [{value, IterationsPerSecond}]}),
+            {comment, io_lib:format("Iterations per second: ~p, Iterations ~p, Benchmark time: ~p seconds)",
+                                    [IterationsPerSecond, Iterations, Time/1000000])} 
+    end.
+
+get_complex_tuple() ->
+    BPort = <<131,102,100,0,13,110,111,110,111,100,101,64,110,111,104,
+              111,115,116,0,0,0,1,0>>,
+    Port = binary_to_term(BPort),
+    
+    BXPort = <<131,102,100,0,11,97,112,97,64,108,101,103,111,108,97,115,
+               0,0,0,24,3>>,
+    XPort = binary_to_term(BXPort),
+
+    BRef = <<131,114,0,3,100,0,13,110,111,110,111,100,101,64,110,111,104,
+             111,115,116,0,0,0,1,255,0,0,0,0,0,0,0,0>>,
+    Ref = binary_to_term(BRef),
+
+    BXRef = <<131,114,0,3,100,0,11,97,112,97,64,108,101,103,111,108,97,115,
+              2,0,0,0,155,0,0,0,0,0,0,0,0>>,
+    XRef = binary_to_term(BXRef),
+
+    BXPid = <<131,103,100,0,11,97,112,97,64,108,101,103,111,108,97,115,
+              0,0,0,36,0,0,0,0,1>>,
+    XPid = binary_to_term(BXPid),
+
+
+    %% X = f1(), Y = f2(), Z = f3(X, Y),
+
+    %% F1 = fun f1/0, % -> abc
+    B1 = <<131,112,0,0,0,66,0,215,206,77,69,249,50,170,17,129,47,21,98,
+           13,196,76,242,0,0,0,1,0,0,0,0,100,0,1,116,97,1,98,2,195,126,
+           58,103,100,0,13,110,111,110,111,100,101,64,110,111,104,111,
+           115,116,0,0,0,112,0,0,0,0,0>>,
+    F1 = binary_to_term(B1),
+
+    %% F2 = fun f2/0, % -> abd
+    B2 = <<131,112,0,0,0,66,0,215,206,77,69,249,50,170,17,129,47,21,98,
+           13,196,76,242,0,0,0,2,0,0,0,0,100,0,1,116,97,2,98,3,130,152,
+           185,103,100,0,13,110,111,110,111,100,101,64,110,111,104,111,
+           115,116,0,0,0,112,0,0,0,0,0>>,
+    F2 = binary_to_term(B2),
+
+    %% F3 = fun f3/2, % -> {abc, abd}
+    B3 = <<131,112,0,0,0,66,2,215,206,77,69,249,50,170,17,129,47,21,98,
+           13,196,76,242,0,0,0,3,0,0,0,0,100,0,1,116,97,3,98,7,168,160,
+           93,103,100,0,13,110,111,110,111,100,101,64,110,111,104,111,
+           115,116,0,0,0,112,0,0,0,0,0>>,
+    F3 = binary_to_term(B3),
+
+    %% F4 = fun () -> 123456789012345678901234567 end,
+    B4 = <<131,112,0,0,0,66,0,215,206,77,69,249,50,170,17,129,47,21,98,
+           13,196,76,242,0,0,0,4,0,0,0,0,100,0,1,116,97,4,98,2,230,21,
+           171,103,100,0,13,110,111,110,111,100,101,64,110,111,104,111,
+           115,116,0,0,0,112,0,0,0,0,0>>,
+    F4 = binary_to_term(B4),
+
+    %% F5 = fun() -> {X,Y,Z} end,
+    B5 = <<131,112,0,0,0,92,0,215,206,77,69,249,50,170,17,129,47,21,98,
+           13,196,76,242,0,0,0,5,0,0,0,3,100,0,1,116,97,5,98,0,99,101,
+           130,103,100,0,13,110,111,110,111,100,101,64,110,111,104,111,
+           115,116,0,0,0,112,0,0,0,0,0,100,0,3,97,98,99,100,0,3,97,98,
+           100,104,2,100,0,3,97,98,99,100,0,3,97,98,100>>,
+    F5 = binary_to_term(B5), 
+    {{1,{2}},an_atom, 1, 3434.923942394,<<"this is a binary">>,
+     make_unaligned_sub_binary(<<"this is also a binary">>),c,d,e,f,g,h,i,j,k,l,[f],
+     999999999999999999666666662123123123123324234999999999999999, 234234234,
+     BPort, Port, BXPort, XPort, BRef, Ref, BXRef, XRef, BXPid, XPid, F1, F2, F3, F4, F5,
+     #{a => 1, b => 2, c => 3, d => 4, e => 5, f => 6, g => 7, h => 8, i => 9,
+       j => 1, k => 1, l => 123123123123213, m => [1,2,3,4,5,6,7,8], o => 5, p => 6,
+       q => 7, r => 8, s => 9}}.
+
+%% Copied from binary_SUITE
+make_unaligned_sub_binary(Bin0) when is_binary(Bin0) ->
+    Bin1 = <<0:3,Bin0/binary,31:5>>,
+    Sz = size(Bin0),
+    <<0:3,Bin:Sz/binary,31:5>> = id(Bin1),
+    Bin.
+
+make_random_bin(Size) ->
+    make_random_bin(Size, []).
+
+make_random_bin(0, Acc) ->
+    iolist_to_binary(Acc);
+make_random_bin(Size, []) ->
+    make_random_bin(Size - 1, [simple_rand() rem 256]);
+make_random_bin(Size, [N | Tail]) ->
+    make_random_bin(Size - 1, [simple_rand(N) rem 256, N |Tail]).
+
+simple_rand() ->
+    123456789.
+simple_rand(Seed) ->
+    A = 1103515245,
+    C = 12345,
+    M = (1 bsl 31),
+    (A * Seed + C) rem M.

@@ -1069,54 +1069,236 @@ do {                               \
 
 #define HCONST 0x9e3779b9UL /* the golden ratio; an arbitrary value */
 
-static Uint32
-block_hash(byte *k, Uint length, Uint32 initval)
+typedef struct {
+    byte *k;
+    Uint32 initval;
+    Uint length;
+    int has_trapped;
+    /* The following is relevant when has_trapped != 0: */
+    Uint32 a,b,c;
+    Uint len;
+    long iterations_until_trap;
+} ErtsBlockHashHelperContext;
+
+#define BLOCK_HASH_BYTES_PER_ITER 12
+
+static
+Uint32 block_hash_helper(ErtsBlockHashHelperContext* ctx,
+                         const int can_trap)
 {
-   Uint32 a,b,c;
-   Uint len;
-
-   /* Set up the internal state */
-   len = length;
-   a = b = HCONST;
-   c = initval;           /* the previous hash value */
-
-   while (len >= 12)
-   {
-      a += (k[0] +((Uint32)k[1]<<8) +((Uint32)k[2]<<16) +((Uint32)k[3]<<24));
-      b += (k[4] +((Uint32)k[5]<<8) +((Uint32)k[6]<<16) +((Uint32)k[7]<<24));
-      c += (k[8] +((Uint32)k[9]<<8) +((Uint32)k[10]<<16)+((Uint32)k[11]<<24));
-      MIX(a,b,c);
-      k += 12; len -= 12;
+    if (can_trap && ctx->has_trapped) {
+       goto trap_wake_up_location;
    }
+   /* Set up the internal state */
+   ctx->len = ctx->length;
+   ctx->a = ctx->b = HCONST;
+   ctx->c = ctx->initval;           /* the previous hash value */
 
-   c += length;
-   switch(len)              /* all the case statements fall through */
+   while (ctx->len >= BLOCK_HASH_BYTES_PER_ITER)
    {
-   case 11: c+=((Uint32)k[10]<<24);
-   case 10: c+=((Uint32)k[9]<<16);
-   case 9 : c+=((Uint32)k[8]<<8);
+      ctx->a += (ctx->k[0] +((Uint32)ctx->k[1]<<8) +((Uint32)ctx->k[2]<<16) +((Uint32)ctx->k[3]<<24));
+      ctx->b += (ctx->k[4] +((Uint32)ctx->k[5]<<8) +((Uint32)ctx->k[6]<<16) +((Uint32)ctx->k[7]<<24));
+      ctx->c += (ctx->k[8] +((Uint32)ctx->k[9]<<8) +((Uint32)ctx->k[10]<<16)+((Uint32)ctx->k[11]<<24));
+      MIX(ctx->a,ctx->b,ctx->c);
+      ctx->k += BLOCK_HASH_BYTES_PER_ITER; ctx->len -= BLOCK_HASH_BYTES_PER_ITER;
+      if (can_trap) {
+          ctx->iterations_until_trap--;
+          if(ctx->iterations_until_trap <= 0) {
+              ctx->has_trapped = 1;
+              return 0;
+          trap_wake_up_location:
+              ctx->has_trapped = 0;
+          }
+      }
+   }
+   ctx->c += ctx->length;
+   switch(ctx->len)              /* all the case statements fall through */
+   {
+   case 11: ctx->c+=((Uint32)ctx->k[10]<<24);
+   case 10: ctx->c+=((Uint32)ctx->k[9]<<16);
+   case 9 : ctx->c+=((Uint32)ctx->k[8]<<8);
       /* the first byte of c is reserved for the length */
-   case 8 : b+=((Uint32)k[7]<<24);
-   case 7 : b+=((Uint32)k[6]<<16);
-   case 6 : b+=((Uint32)k[5]<<8);
-   case 5 : b+=k[4];
-   case 4 : a+=((Uint32)k[3]<<24);
-   case 3 : a+=((Uint32)k[2]<<16);
-   case 2 : a+=((Uint32)k[1]<<8);
-   case 1 : a+=k[0];
+   case 8 : ctx->b+=((Uint32)ctx->k[7]<<24);
+   case 7 : ctx->b+=((Uint32)ctx->k[6]<<16);
+   case 6 : ctx->b+=((Uint32)ctx->k[5]<<8);
+   case 5 : ctx->b+=ctx->k[4];
+   case 4 : ctx->a+=((Uint32)ctx->k[3]<<24);
+   case 3 : ctx->a+=((Uint32)ctx->k[2]<<16);
+   case 2 : ctx->a+=((Uint32)ctx->k[1]<<8);
+   case 1 : ctx->a+=ctx->k[0];
      /* case 0: nothing left to add */
    }
-   MIX(a,b,c);
-   return c;
+   MIX(ctx->a,ctx->b,ctx->c);
+   return ctx->c;
 }
 
 Uint32
-make_hash2(Eterm term)
+block_hash(byte *k, Uint length, Uint32 initval)
 {
+    ErtsBlockHashHelperContext context = {
+        .k = k,
+        .length = length,
+        .initval = initval};
+    return block_hash_helper(&context, 0);
+}
+
+typedef enum {
+    tag_primary_list,
+    arityval_subtag,
+    hamt_subtag_head_flatmap,
+    map_subtag,
+    fun_subtag,
+    neg_big_subtag,
+    sub_binary_subtag_1,
+    sub_binary_subtag_2,
+    hash2_common_1,
+    hash2_common_2,
+    hash2_common_3,
+} ErtsMakeHash2TrapLocation; 
+
+typedef struct {
+    int c;
+    Uint32 sh;
+    Eterm* ptr;
+} ErtsMakeHash2Context_TAG_PRIMARY_LIST;
+
+typedef struct {
+    int i;
+    int arity;
+    Eterm* elem;
+} ErtsMakeHash2Context_ARITYVAL_SUBTAG;
+
+typedef struct {
+    Eterm *ks;
+    Eterm *vs;
+    int i;
+    Uint size;
+} ErtsMakeHash2Context_HAMT_SUBTAG_HEAD_FLATMAP;
+
+typedef struct {
+    Eterm* ptr;
+    int i;
+} ErtsMakeHash2Context_MAP_SUBTAG;
+
+typedef struct {
+    Uint num_free;
+    Eterm* bptr;
+} ErtsMakeHash2Context_FUN_SUBTAG;
+
+typedef struct {
+    Eterm* ptr;
+    Uint i;
+    Uint n;
+    Uint32 con;
+} ErtsMakeHash2Context_NEG_BIG_SUBTAG;
+
+typedef struct {
+    byte* bptr;
+    unsigned sz;
+    Uint bitsize;
+    Uint bitoffs;
+    ErtsBlockHashHelperContext block_hash_ctx;
+    /* The following fields are only used when bitoffs != 0 */
+    byte* buf;
+    Uint block_index;
+    Uint nr_of_bytes;
+    int is_tmp_alloc;
+
+} ErtsMakeHash2Context_SUB_BINARY_SUBTAG;
+
+typedef struct {
+    int dummy__; /* Empty structs are not supported on all platforms */
+} ErtsMakeHash2Context_EMPTY;
+
+typedef struct {
+    ErtsMakeHash2TrapLocation trap_location;
+    /* specific to the trap location: */
+    union {
+        ErtsMakeHash2Context_TAG_PRIMARY_LIST tag_primary_list;
+        ErtsMakeHash2Context_ARITYVAL_SUBTAG arityval_subtag;
+        ErtsMakeHash2Context_HAMT_SUBTAG_HEAD_FLATMAP hamt_subtag_head_flatmap;
+        ErtsMakeHash2Context_MAP_SUBTAG map_subtag;
+        ErtsMakeHash2Context_FUN_SUBTAG fun_subtag;
+        ErtsMakeHash2Context_NEG_BIG_SUBTAG neg_big_subtag;
+        ErtsMakeHash2Context_SUB_BINARY_SUBTAG sub_binary_subtag_1;
+        ErtsMakeHash2Context_SUB_BINARY_SUBTAG sub_binary_subtag_2;
+        ErtsMakeHash2Context_EMPTY hash2_common_1;
+        ErtsMakeHash2Context_EMPTY hash2_common_2;
+        ErtsMakeHash2Context_EMPTY hash2_common_3;
+    } trap_location_state;
+    /* same for all trap locations: */
+    Eterm term; 
     Uint32 hash;
     Uint32 hash_xor_pairs;
-    DeclareTmpHeapNoproc(tmp_big,2);
+    Eterm tmp_big[2];
+    ErtsEStack stack;
+} ErtsMakeHash2Context;
 
+static int make_hash2_ctx_bin_dtor(Binary *context_bin) {
+    ErtsMakeHash2Context* context = ERTS_MAGIC_BIN_DATA(context_bin);
+    DESTROY_SAVED_ESTACK(&context->stack);
+    if (context->trap_location == sub_binary_subtag_2 &&
+        context->trap_location_state.sub_binary_subtag_2.buf != NULL) {
+        erts_free(ERTS_ALC_T_PHASH2_TRAP, context->trap_location_state.sub_binary_subtag_2.buf);
+    }
+    return 1;
+}
+
+/* hash2_save_trap_state is called seldom so we want to avoid inlining */
+#ifdef __GNUC__
+#  define NOINLINE_HASH2_SAVE_TRAP_STATE __attribute__((__noinline__))
+#else
+#  define NOINLINE_HASH2_SAVE_TRAP_STATE
+#endif
+static NOINLINE_HASH2_SAVE_TRAP_STATE
+Eterm hash2_save_trap_state(Eterm state_mref,
+                            Uint32 hash_xor_pairs,
+                            Uint32 hash,
+                            Process* p,
+                            Eterm term,
+                            Eterm* tmp_big,
+                            Eterm* ESTK_DEF_STACK(s),
+                            ErtsEStack s,
+                            ErtsMakeHash2TrapLocation trap_location,
+                            void* trap_location_state_ptr,
+                            size_t trap_location_state_size) {
+    Binary* state_bin;
+    ErtsMakeHash2Context* context;
+    if (state_mref == THE_NON_VALUE) {
+        Eterm* hp;
+        state_bin = erts_create_magic_binary(sizeof(ErtsMakeHash2Context),
+                                             make_hash2_ctx_bin_dtor);
+        hp = HAlloc(p, ERTS_MAGIC_REF_THING_SIZE);
+        state_mref = erts_mk_magic_ref(&hp, &MSO(p), state_bin);
+    } else {
+        state_bin = erts_magic_ref2bin(state_mref);
+    }
+    context = ERTS_MAGIC_BIN_DATA(state_bin);
+    context->term = term;
+    context->hash = hash;
+    context->hash_xor_pairs = hash_xor_pairs;
+    context->tmp_big[0] = tmp_big[0];
+    context->tmp_big[1] = tmp_big[1];
+    ESTACK_SAVE(s, &context->stack);
+    context->trap_location = trap_location;
+    sys_memcpy(&context->trap_location_state,
+               trap_location_state_ptr,
+               trap_location_state_size);
+    erts_set_gc_state(p, 0);
+    BUMP_ALL_REDS(p);
+    return state_mref;
+}
+#undef NOINLINE_HASH2_SAVE_TRAP_STATE
+
+/* Writes back a magic reference to *state_mref_write_back when the
+   function traps */
+static ERTS_INLINE Uint32
+make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, Process* p)
+{
+    static const Uint ITERATIONS_PER_RED = 64;
+    Uint32 hash;
+    Uint32 hash_xor_pairs;
+    Eterm tmp_big[2];
     ERTS_UNDEF(hash_xor_pairs, 0);
 
 /* (HCONST * {2, ..., 22}) mod 2^32 */
@@ -1174,6 +1356,41 @@ make_hash2(Eterm term)
 #  define POINTER_HASH(Ptr, AConst) UINT32_HASH(Ptr, AConst)
 #endif
 
+#define TRAP_LOCATION_NO_RED(location_name)                             \
+    do {                                                                \
+        if(can_trap && iterations_until_trap <= 0) {                    \
+                *state_mref_write_back  =                               \
+                    hash2_save_trap_state(state_mref,                   \
+                                          hash_xor_pairs,               \
+                                          hash,                         \
+                                          p,                            \
+                                          term,                         \
+                                          tmp_big,                      \
+                                          ESTK_DEF_STACK(s),            \
+                                          s,                            \
+                                          location_name,                \
+                                          &ctx,                         \
+                                          sizeof(ctx));                 \
+                return 0;                                               \
+            L_##location_name:                                          \
+                ctx = context->trap_location_state. location_name;      \
+        }                                                               \
+    } while(0)
+
+#define TRAP_LOCATION(location_name)                            \
+    do {                                                        \
+        if (can_trap) {                                         \
+            iterations_until_trap--;                            \
+            TRAP_LOCATION_NO_RED(location_name);                \
+        }                                                       \
+    } while(0)
+
+#define TRAP_LOCATION_NO_CTX(location_name)                             \
+    do {                                                                \
+        ErtsMakeHash2Context_EMPTY ctx;                                 \
+        TRAP_LOCATION(location_name);                                   \
+    } while(0)
+    
     /* Optimization. Simple cases before declaration of estack. */
     if (primary_tag(term) == TAG_PRIMARY_IMMED1) {
 	switch (term & _TAG_IMMED1_MASK) {
@@ -1200,37 +1417,82 @@ make_hash2(Eterm term)
     };
     {
     Eterm tmp;
+    long max_iterations = 0;
+    long iterations_until_trap = 0;
+    Eterm state_mref = THE_NON_VALUE;
+    ErtsMakeHash2Context* context = NULL;
     DECLARE_ESTACK(s);
-
-    UseTmpHeapNoproc(2);
+    ESTACK_CHANGE_ALLOCATOR(s, ERTS_ALC_T_SAVED_ESTACK);
+    if(can_trap){
+#ifdef DEBUG
+        (void)ITERATIONS_PER_RED;
+        iterations_until_trap = max_iterations =
+            (1103515245 * (ERTS_BIF_REDS_LEFT(p)) + 12345)  % 1171;
+#else
+        iterations_until_trap = max_iterations =
+            ITERATIONS_PER_RED * ERTS_BIF_REDS_LEFT(p);
+#endif
+    }
+    if (can_trap && is_internal_magic_ref(term)) {
+        Binary* state_bin;
+        state_mref = term;
+        state_bin = erts_magic_ref2bin(state_mref);
+        if (ERTS_MAGIC_BIN_DESTRUCTOR(state_bin) == make_hash2_ctx_bin_dtor) {
+            /* Restore state after a trap */
+            context = ERTS_MAGIC_BIN_DATA(state_bin);
+            term = context->term;
+            hash = context-> hash;
+            hash_xor_pairs = context->hash_xor_pairs;
+            tmp_big[0] = context->tmp_big[0];
+            tmp_big[1] = context->tmp_big[1];
+            ESTACK_RESTORE(s, &context->stack);
+            ASSERT(p->flags & F_DISABLE_GC);
+            erts_set_gc_state(p, 1);
+            switch (context->trap_location) {
+            case hash2_common_3:           goto L_hash2_common_3;
+            case tag_primary_list:         goto L_tag_primary_list;
+            case arityval_subtag:          goto L_arityval_subtag;
+            case hamt_subtag_head_flatmap: goto L_hamt_subtag_head_flatmap;
+            case map_subtag:               goto L_map_subtag;
+            case fun_subtag:               goto L_fun_subtag;
+            case neg_big_subtag:           goto L_neg_big_subtag;
+            case sub_binary_subtag_1:      goto L_sub_binary_subtag_1;
+            case sub_binary_subtag_2:      goto L_sub_binary_subtag_2;
+            case hash2_common_1:           goto L_hash2_common_1;
+            case hash2_common_2:           goto L_hash2_common_2;
+            }
+        }
+    }
     hash = 0;
     for (;;) {
 	switch (primary_tag(term)) {
 	case TAG_PRIMARY_LIST:
 	{
-	    int c = 0;
-	    Uint32 sh = 0;
-	    Eterm* ptr = list_val(term);
-	    while (is_byte(*ptr)) {
+            ErtsMakeHash2Context_TAG_PRIMARY_LIST ctx = {
+                .c =  0,
+                .sh = 0,
+                .ptr = list_val(term)};
+	    while (is_byte(*ctx.ptr)) {
 		/* Optimization for strings. */
-		sh = (sh << 8) + unsigned_val(*ptr);
-		if (c == 3) {
-		    UINT32_HASH(sh, HCONST_4);
-		    c = sh = 0;
+		ctx.sh = (ctx.sh << 8) + unsigned_val(*ctx.ptr);
+		if (ctx.c == 3) {
+		    UINT32_HASH(ctx.sh, HCONST_4);
+		    ctx.c = ctx.sh = 0;
 		} else {
-		    c++;
+		    ctx.c++;
 		}
-		term = CDR(ptr);
+		term = CDR(ctx.ptr);
 		if (is_not_list(term))
 		    break;
-		ptr = list_val(term);
+		ctx.ptr = list_val(term);
+                TRAP_LOCATION(tag_primary_list);
 	    }
-	    if (c > 0)
-		UINT32_HASH(sh, HCONST_4);
+	    if (ctx.c > 0)
+		UINT32_HASH(ctx.sh, HCONST_4);
 	    if (is_list(term)) {
-		tmp = CDR(ptr);
+		tmp = CDR(ctx.ptr);
                 ESTACK_PUSH(s, tmp);
-		term = CAR(ptr);
+		term = CAR(ctx.ptr);
 	    }
 	}
 	break;
@@ -1241,34 +1503,39 @@ make_hash2(Eterm term)
 	    switch (hdr & _TAG_HEADER_MASK) {
 	    case ARITYVAL_SUBTAG:
 	    {
-		int i;
-		int arity = header_arity(hdr);
-		Eterm* elem = tuple_val(term);
-		UINT32_HASH(arity, HCONST_9);
-		if (arity == 0) /* Empty tuple */
+                ErtsMakeHash2Context_ARITYVAL_SUBTAG ctx = {
+                    .i =  0,
+                    .arity = header_arity(hdr),
+                    .elem = tuple_val(term)};
+		UINT32_HASH(ctx.arity, HCONST_9);
+		if (ctx.arity == 0) /* Empty tuple */
 		    goto hash2_common;
-		for (i = arity; ; i--) {
-		    term = elem[i];
-                    if (i == 1)
+		for (ctx.i = ctx.arity; ; ctx.i--) {
+		    term = ctx.elem[ctx.i];
+                    if (ctx.i == 1)
                         break;
                     ESTACK_PUSH(s, term);
+                    TRAP_LOCATION(arityval_subtag);
 		}
 	    }
 	    break;
             case MAP_SUBTAG:
             {
-                Eterm* ptr = boxed_val(term) + 1;
                 Uint size;
-                int i;
+                ErtsMakeHash2Context_MAP_SUBTAG ctx = {
+                    .ptr = boxed_val(term) + 1,
+                    .i = 0};
                 switch (hdr & _HEADER_MAP_SUBTAG_MASK) {
                 case HAMT_SUBTAG_HEAD_FLATMAP:
                 {
                     flatmap_t *mp = (flatmap_t *)flatmap_val(term);
-                    Eterm *ks = flatmap_get_keys(mp);
-                    Eterm *vs = flatmap_get_values(mp);
-                    size      = flatmap_get_size(mp);
-                    UINT32_HASH(size, HCONST_16);
-                    if (size == 0)
+                    ErtsMakeHash2Context_HAMT_SUBTAG_HEAD_FLATMAP ctx = {
+                        .ks = flatmap_get_keys(mp),
+                        .vs = flatmap_get_values(mp),
+                        .i = 0,
+                        .size = flatmap_get_size(mp)};
+                    UINT32_HASH(ctx.size, HCONST_16);
+                    if (ctx.size == 0)
                         goto hash2_common;
 
                     /* We want a portable hash function that is *independent* of
@@ -1281,17 +1548,18 @@ make_hash2(Eterm term)
                     ESTACK_PUSH(s, HASH_MAP_TAIL);
                     hash = 0;
                     hash_xor_pairs = 0;
-                    for (i = size - 1; i >= 0; i--) {
+                    for (ctx.i = ctx.size - 1; ctx.i >= 0; ctx.i--) {
                         ESTACK_PUSH(s, HASH_MAP_PAIR);
-                        ESTACK_PUSH(s, vs[i]);
-                        ESTACK_PUSH(s, ks[i]);
+                        ESTACK_PUSH(s, ctx.vs[ctx.i]);
+                        ESTACK_PUSH(s, ctx.ks[ctx.i]);
+                        TRAP_LOCATION(hamt_subtag_head_flatmap);
                     }
                     goto hash2_common;
                 }
 
                 case HAMT_SUBTAG_HEAD_ARRAY:
                 case HAMT_SUBTAG_HEAD_BITMAP:
-                    size = *ptr++;
+                    size = *ctx.ptr++;
                     UINT32_HASH(size, HCONST_16);
                     if (size == 0)
                         goto hash2_common;
@@ -1303,27 +1571,28 @@ make_hash2(Eterm term)
                 }
                 switch (hdr & _HEADER_MAP_SUBTAG_MASK) {
                 case HAMT_SUBTAG_HEAD_ARRAY:
-                    i = 16;
+                    ctx.i = 16;
                     break;
                 case HAMT_SUBTAG_HEAD_BITMAP:
                 case HAMT_SUBTAG_NODE_BITMAP:
-                    i = hashmap_bitcount(MAP_HEADER_VAL(hdr));
+                    ctx.i = hashmap_bitcount(MAP_HEADER_VAL(hdr));
                     break;
                 default:
                     erts_exit(ERTS_ERROR_EXIT, "bad header");
                 }
-                while (i) {
-                    if (is_list(*ptr)) {
-                        Eterm* cons = list_val(*ptr);
+                while (ctx.i) {
+                    if (is_list(*ctx.ptr)) {
+                        Eterm* cons = list_val(*ctx.ptr);
                         ESTACK_PUSH(s, HASH_MAP_PAIR);
                         ESTACK_PUSH(s, CDR(cons));
                         ESTACK_PUSH(s, CAR(cons));
                     }
                     else {
-                        ASSERT(is_boxed(*ptr));
-                        ESTACK_PUSH(s, *ptr);
+                        ASSERT(is_boxed(*ctx.ptr));
+                        ESTACK_PUSH(s, *ctx.ptr);
                     }
-                    i--; ptr++;
+                    ctx.i--; ctx.ptr++;
+                    TRAP_LOCATION(map_subtag);
                 }
                 goto hash2_common;
             }
@@ -1344,22 +1613,25 @@ make_hash2(Eterm term)
 	    case FUN_SUBTAG:
 	    {
 		ErlFunThing* funp = (ErlFunThing *) fun_val(term);
-		Uint num_free = funp->num_free;
+                ErtsMakeHash2Context_FUN_SUBTAG ctx = {
+                    .num_free = funp->num_free,
+                    .bptr = NULL};
 		UINT32_HASH_2
-		    (num_free,
+		    (ctx.num_free,
 		     atom_tab(atom_val(funp->fe->module))->slot.bucket.hvalue,
 		     HCONST);
 		UINT32_HASH_2
 		    (funp->fe->old_index, funp->fe->old_uniq, HCONST);
-		if (num_free == 0) {
+		if (ctx.num_free == 0) {
 		    goto hash2_common;
 		} else {
-		    Eterm* bptr = funp->env + num_free - 1;
-		    while (num_free-- > 1) {
-			term = *bptr--;
+		    ctx.bptr = funp->env + ctx.num_free - 1;
+		    while (ctx.num_free-- > 1) {
+			term = *ctx.bptr--;
 			ESTACK_PUSH(s, term);
+                        TRAP_LOCATION(fun_subtag);
 		    }
-		    term = *bptr;
+		    term = *ctx.bptr;
 		}
 	    }
 	    break;
@@ -1367,32 +1639,108 @@ make_hash2(Eterm term)
 	    case HEAP_BINARY_SUBTAG:
 	    case SUB_BINARY_SUBTAG:
 	    {
-		byte* bptr;
-		unsigned sz = binary_size(term);
+                ErtsMakeHash2Context_SUB_BINARY_SUBTAG ctx = {
+                    .bptr = 0,
+                    .sz = binary_size(term),
+                    .bitsize = 0,
+                    .bitoffs = 0
+                };
 		Uint32 con = HCONST_13 + hash;
-		Uint bitoffs;
-		Uint bitsize;
 
-		ERTS_GET_BINARY_BYTES(term, bptr, bitoffs, bitsize);
-		if (sz == 0 && bitsize == 0) {
+		ERTS_GET_BINARY_BYTES(term, ctx.bptr, ctx.bitoffs, ctx.bitsize);
+		if (ctx.sz == 0 && ctx.bitsize == 0) {
 		    hash = con;
 		} else {
-		    if (bitoffs == 0) {
-			hash = block_hash(bptr, sz, con);
-			if (bitsize > 0) {
-			    UINT32_HASH_2(bitsize, (bptr[sz] >> (8 - bitsize)),
+		    if (ctx.bitoffs == 0) {
+                        ErtsBlockHashHelperContext* block_hash_ctx = &ctx.block_hash_ctx;
+                        block_hash_ctx->k = ctx.bptr;
+                        block_hash_ctx->length = ctx.sz;
+                        block_hash_ctx->initval = con;
+                        block_hash_ctx->has_trapped = 0;
+                        do {
+                            block_hash_ctx->iterations_until_trap = iterations_until_trap;
+
+                            hash = block_hash_helper(block_hash_ctx, 1);
+
+                            iterations_until_trap = block_hash_ctx->iterations_until_trap;
+                            TRAP_LOCATION_NO_RED(sub_binary_subtag_1);
+                            block_hash_ctx = &ctx.block_hash_ctx;
+                        } while (block_hash_ctx->has_trapped);
+			if (ctx.bitsize > 0) {
+			    UINT32_HASH_2(ctx.bitsize, (ctx.bptr[ctx.sz] >> (8 - ctx.bitsize)),
 					  HCONST_15);
 			}
 		    } else {
-			byte* buf = (byte *) erts_alloc(ERTS_ALC_T_TMP,
-							sz + (bitsize != 0));
-			erts_copy_bits(bptr, bitoffs, 1, buf, 0, 1, sz*8+bitsize);
-			hash = block_hash(buf, sz, con);
-			if (bitsize > 0) {
-			    UINT32_HASH_2(bitsize, (buf[sz] >> (8 - bitsize)),
-					  HCONST_15);
-			}
-			erts_free(ERTS_ALC_T_TMP, (void *) buf);
+#define BH_NUM BLOCK_HASH_BYTES_PER_ITER
+#define MAX_BINARY_BUF_SIZE (BH_NUM*1024)
+#define MAX_ITERATIONS_UNTIL_TRAP (MAX_BINARY_BUF_SIZE / BH_NUM)
+#define BYTE_BITS 8
+#define BUF_SIZE() (ctx.nr_of_bytes > MAX_BINARY_BUF_SIZE ? MAX_BINARY_BUF_SIZE: ctx.nr_of_bytes)                        
+                        ErtsBlockHashHelperContext* block_hash_ctx = &ctx.block_hash_ctx;
+                        ASSERT(MAX_BINARY_BUF_SIZE % BH_NUM == 0);
+                        ctx.nr_of_bytes = ctx.sz + (ctx.bitsize != 0);
+                        ctx.buf = (byte *) erts_alloc(ERTS_ALC_T_TMP, BUF_SIZE());
+                        ctx.is_tmp_alloc = 1;
+                        block_hash_ctx->length = ctx.sz;
+                        block_hash_ctx->initval = con;
+                        ctx.block_index = 0;
+                        block_hash_ctx->has_trapped = 0;
+                        do {
+                            int is_last_block = (1+ctx.block_index)*MAX_BINARY_BUF_SIZE >= ctx.nr_of_bytes;
+                            size_t nr_of_bits_to_copy;
+                            if (is_last_block) {
+                                nr_of_bits_to_copy = ctx.sz*BYTE_BITS+ctx.bitsize -
+                                    ctx.block_index * MAX_BINARY_BUF_SIZE*BYTE_BITS;
+                                /* Set block_hash_ctx->iterations_until_trap so that block_hash_helper
+                                   do not trap in the last block.*/
+                                block_hash_ctx->iterations_until_trap = LONG_MAX;
+                                iterations_until_trap -=
+                                    2 * (ctx.nr_of_bytes - ctx.block_index * MAX_BINARY_BUF_SIZE) / BH_NUM;
+                            } else {
+                                nr_of_bits_to_copy = MAX_BINARY_BUF_SIZE*BYTE_BITS;
+                                /* Set block_hash_ctx->iterations_until_trap so that block_hash_helper
+                                   traps just before reaching the end of the buffer.*/
+                                block_hash_ctx->iterations_until_trap = MAX_BINARY_BUF_SIZE/BH_NUM;
+                                iterations_until_trap -= 2 * (MAX_BINARY_BUF_SIZE/BH_NUM);
+                            }
+                            erts_copy_bits(ctx.bptr + ctx.block_index*MAX_BINARY_BUF_SIZE,
+                                           ctx.bitoffs, 1, ctx.buf, 0, 1, nr_of_bits_to_copy);
+                            block_hash_ctx->k = ctx.buf;
+
+                            hash = block_hash_helper(block_hash_ctx, 1);
+
+                            ctx.block_index++;
+                            if (can_trap) {
+                                if(iterations_until_trap <= 0 && ctx.is_tmp_alloc) {
+                                    size_t buf_size = BUF_SIZE();
+                                    byte* new_buf = (byte *) erts_alloc(ERTS_ALC_T_PHASH2_TRAP, buf_size);
+                                    sys_memcpy(new_buf, ctx.buf, buf_size);
+                                    block_hash_ctx->k = new_buf + (block_hash_ctx->k - ctx.buf);
+                                    erts_free(ERTS_ALC_T_TMP, (void *) ctx.buf);
+                                    ctx.buf = new_buf;
+                                    ctx.is_tmp_alloc = 0;
+                                }
+                                TRAP_LOCATION_NO_RED(sub_binary_subtag_2);
+                                block_hash_ctx = &ctx.block_hash_ctx;
+                            }
+                        } while (block_hash_ctx->has_trapped);
+                        if (ctx.bitsize > 0) {
+                            UINT32_HASH_2(ctx.bitsize,
+                                          (ctx.buf[ctx.sz - (ctx.block_index - 1) * MAX_BINARY_BUF_SIZE] >> (8 - ctx.bitsize)),
+                                          HCONST_15);
+                        }
+                        if (ctx.is_tmp_alloc) {
+                            erts_free(ERTS_ALC_T_TMP, ctx.buf);
+                        } else {
+                            erts_free(ERTS_ALC_T_PHASH2_TRAP, ctx.buf);
+                            context->trap_location_state.sub_binary_subtag_2.buf = NULL;
+                        }
+#undef MAX_BINARY_BUF_SIZE
+#undef MAX_ITERATIONS_UNTIL_TRAP
+#undef BYTE_BITS
+#undef BUF_SIZE
+#undef BH_NUM
+#undef BLOCK_HASH_BYTES_PER_ITER
 		    }
 		}
 		goto hash2_common;
@@ -1401,36 +1749,41 @@ make_hash2(Eterm term)
 	    case POS_BIG_SUBTAG:
 	    case NEG_BIG_SUBTAG:
 	    {
-		Eterm* ptr = big_val(term);
-		Uint i = 0;
-		Uint n = BIG_SIZE(ptr);
-		Uint32 con = BIG_SIGN(ptr) ? HCONST_10 : HCONST_11;
+		Eterm* big_val_ptr = big_val(term);
+                ErtsMakeHash2Context_NEG_BIG_SUBTAG ctx = {
+                    .ptr = big_val_ptr,
+                    .i = 0,
+                    .n = BIG_SIZE(big_val_ptr),
+                    .con = BIG_SIGN(big_val_ptr) ? HCONST_10 : HCONST_11};
 #if D_EXP == 16
 		do {
 		    Uint32 x, y;
-		    x = i < n ? BIG_DIGIT(ptr, i++) : 0;
-		    x += (Uint32)(i < n ? BIG_DIGIT(ptr, i++) : 0) << 16;
-		    y = i < n ? BIG_DIGIT(ptr, i++) : 0;
-		    y += (Uint32)(i < n ? BIG_DIGIT(ptr, i++) : 0) << 16;
-		    UINT32_HASH_2(x, y, con);
-		} while (i < n);
+		    x = ctx.i < ctx.n ? BIG_DIGIT(ctx.ptr, ctx.i++) : 0;
+		    x += (Uint32)(ctx.i < ctx.n ? BIG_DIGIT(ctx.ptr, ctx.i++) : 0) << 16;
+		    y = ctx.i < ctx.n ? BIG_DIGIT(ctx.ptr, ctx.i++) : 0;
+		    y += (Uint32)(ctx.i < ctx.n ? BIG_DIGIT(ctx.ptr, ctx.i++) : 0) << 16;
+		    UINT32_HASH_2(x, y, ctx.con);
+                    TRAP_LOCATION(neg_big_subtag);
+		} while (ctx.i < ctx.n);
 #elif D_EXP == 32
 		do {
 		    Uint32 x, y;
-		    x = i < n ? BIG_DIGIT(ptr, i++) : 0;
-		    y = i < n ? BIG_DIGIT(ptr, i++) : 0;
-		    UINT32_HASH_2(x, y, con);
-		} while (i < n);
+		    x = ctx.i < ctx.n ? BIG_DIGIT(ctx.ptr, ctx.i++) : 0;
+		    y = ctx.i < ctx.n ? BIG_DIGIT(ctx.ptr, ctx.i++) : 0;
+		    UINT32_HASH_2(x, y, ctx.con);
+                    TRAP_LOCATION(neg_big_subtag);
+		} while (ctx.i < ctx.n);
 #elif D_EXP == 64
 		do {
 		    Uint t;
 		    Uint32 x, y;
-                    ASSERT(i < n);
-		    t = BIG_DIGIT(ptr, i++);
+                    ASSERT(ctx.i < ctx.n);
+		    t = BIG_DIGIT(ctx.ptr, ctx.i++);
 		    x = t & 0xffffffff;
 		    y = t >> 32;
-		    UINT32_HASH_2(x, y, con);
-		} while (i < n);
+		    UINT32_HASH_2(x, y, ctx.con);
+                    TRAP_LOCATION(neg_big_subtag);
+		} while (ctx.i < ctx.n);
 #else
 #error "unsupported D_EXP size"
 #endif
@@ -1529,7 +1882,10 @@ make_hash2(Eterm term)
 
 	    if (ESTACK_ISEMPTY(s)) {
 		DESTROY_ESTACK(s);
-		UnUseTmpHeapNoproc(2);
+                if (can_trap) {
+                    BUMP_REDS(p, (max_iterations - iterations_until_trap) / ITERATIONS_PER_RED);
+                    ASSERT(!(p->flags & F_DISABLE_GC));
+                }
 		return hash;
 	    }
 
@@ -1540,18 +1896,37 @@ make_hash2(Eterm term)
 		    hash = (Uint32) ESTACK_POP(s);
                     UINT32_HASH(hash_xor_pairs, HCONST_19);
 		    hash_xor_pairs = (Uint32) ESTACK_POP(s);
+                    TRAP_LOCATION_NO_CTX(hash2_common_1);
 		    goto hash2_common;
 		}
 		case HASH_MAP_PAIR:
 		    hash_xor_pairs ^= hash;
                     hash = 0;
+                    TRAP_LOCATION_NO_CTX(hash2_common_2);
 		    goto hash2_common;
 		default:
 		    break;
 	    }
+
 	}
+        TRAP_LOCATION_NO_CTX(hash2_common_3);
     }
     }
+#undef TRAP_LOCATION_NO_RED
+#undef TRAP_LOCATION
+#undef TRAP_LOCATION_NO_CTX
+}
+
+Uint32
+make_hash2(Eterm term)
+{
+    return make_hash2_helper(term, 0, NULL, NULL);
+}
+
+Uint32
+trapping_make_hash2(Eterm term, Eterm* state_mref_write_back, Process* p)
+{
+    return make_hash2_helper(term, 1, state_mref_write_back, p);
 }
 
 /* Term hash function for internal use.
