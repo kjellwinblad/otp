@@ -91,6 +91,7 @@
 
 -include_lib("stdlib/include/ms_transform.hrl"). % ets:fun2ms
 -include_lib("common_test/include/ct.hrl").
+-include_lib("common_test/include/ct_event.hrl").
 
 -define(m(A,B), assert_eq(A,B)).
 -define(heap_binary_size, 64).
@@ -6452,9 +6453,9 @@ prefill_table_loop(T, RS0, N, ObjFun) ->
     prefill_table_loop(T, RS1, N-1, ObjFun).
 
 throughput_benchmark() -> 
-    throughput_benchmark(false, not_set, not_set).
+    throughput_benchmark(false, not_set, not_set, not_set, not_set).
 
-throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs) ->
+throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs, ThreadCountsOpt, TableTypesOpt) ->
     NrOfSchedulers = erlang:system_info(schedulers),
     %% Definitions of operations that are supported by the benchmark
     NextSeqOp =
@@ -6604,6 +6605,20 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs) ->
                 timer:sleep(RecoverTime),
                 TotalWorksDone
         end,
+    DataHolder = 
+        fun DataHolderFun(Data)->
+                receive
+                    {get_data, Pid} -> Pid ! {ets_bench_data, Data};
+                    D -> DataHolderFun([Data,D])
+                end,
+        end,
+    DataHolderPid = spawn(fun()-> DataHolder([]) end),
+    PrintData =
+        fun PrintDataFun(Str, List) ->
+                io:format(Str, List),
+                DataHolderPid ! iolib:format(Str, List);
+            PrintDataFun(Str) -> PrintDataFun(Str, [])
+        end,
     %%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%% Benchmark Configuration %%%%%%%%%%%%%%%%%%%%%%%%
@@ -6611,9 +6626,13 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs) ->
     %%
     %% Change the following variables to configure the benchmark runs
     ThreadCounts =
-        case TestMode of
-            true -> [1, NrOfSchedulers];
-            false -> CalculateThreadCounts([1])
+        case ThreadCountsOpt of
+            not_set ->
+                case TestMode of
+                    true -> [1, NrOfSchedulers];
+                    false -> CalculateThreadCounts([1])
+                end;
+            _ -> ThreadCountsOpt
         end,
     KeyRanges = % Sizes of the key ranges
         case TestMode of
@@ -6631,16 +6650,20 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs) ->
             _ -> RecoverTimeMs
         end,
     TableTypes = % The table types that will be benchmarked
-        [
-         [ordered_set, public],
-         [ordered_set, public, {write_concurrency, true}],
-         [ordered_set, public, {read_concurrency, true}],
-         [ordered_set, public, {write_concurrency, true}, {read_concurrency, true}],
-         [set, public],
-         [set, public, {write_concurrency, true}],
-         [set, public, {read_concurrency, true}],
-         [set, public, {write_concurrency, true}, {read_concurrency, true}]
-        ],
+        case TableTypesOpt of
+            not_set -> 
+                [
+                 [ordered_set, public],
+                 [ordered_set, public, {write_concurrency, true}],
+                 [ordered_set, public, {read_concurrency, true}],
+                 [ordered_set, public, {write_concurrency, true}, {read_concurrency, true}],
+                 [set, public],
+                 [set, public, {write_concurrency, true}],
+                 [set, public, {read_concurrency, true}],
+                 [set, public, {write_concurrency, true}, {read_concurrency, true}]
+                ];
+            _ -> TableTypesOpt
+        end,
     Scenarios = % Benchmark scenarios (the fractions should add up to approximately 1.0)
         [
          [
@@ -6727,15 +6750,15 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs) ->
                  false -> ok
              end,
     %% Run the benchmark
-    io:format("# Each instance of the benchmark runs for ~w seconds:~n", [Duration/1000]),
-    io:format("# The result of a benchmark instance is presented as a number representing~n"),
-    io:format("# the number of operations performed per second:~n~n~n"),
-    io:format("# To plot graphs for the results below:~n"),
-    io:format("# 1. Open \"$ERL_TOP/lib/stdlib/test/ets_SUITE_data/visualize_throughput.html\" in a web browser~n"),
-    io:format("# 2. Copy the lines between \"#BENCHMARK STARTED$\" and \"#BENCHMARK ENDED$\" below~n"),
-    io:format("# 3. Paste the lines copied in step 2 to the text box in the browser window opened in~n"),
-    io:format("#    step 1 and press the Render button~n~n"),
-    io:format("#BENCHMARK STARTED$~n"),
+    PrintData("", "# Each instance of the benchmark runs for ~w seconds:~n", [Duration/1000]),
+    PrintData("# The result of a benchmark instance is presented as a number representing~n"),
+    PrintData("# the number of operations performed per second:~n~n~n"),
+    PrintData("# To plot graphs for the results below:~n"),
+    PrintData("# 1. Open \"$ERL_TOP/lib/stdlib/test/ets_SUITE_data/visualize_throughput.html\" in a web browser~n"),
+    PrintData("# 2. Copy the lines between \"#BENCHMARK STARTED$\" and \"#BENCHMARK ENDED$\" below~n"),
+    PrintData("# 3. Paste the lines copied in step 2 to the text box in the browser window opened in~n"),
+    PrintData("#    step 1 and press the Render button~n~n"),
+    PrintData("#BENCHMARK STARTED$~n"),
     %% The following loop runs all benchmark scenarios and prints the results (i.e, operations/second)
     lists:foreach(
       fun(KeyRange) ->
@@ -6761,7 +6784,13 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs) ->
                                                                   KeyRange,
                                                                   Duration,
                                                                   TimeMsToSleepAfterEachBenchmarkRun),
-                                            io:format("; ~f",[Result/(Duration/1000.0)])                       
+                                            Throughput = Result/(Duration/1000.0),
+                                            io:format("; ~f",[Throughput]),
+                                            ct_event:notify(
+                                              #event{name = benchmark_data, 
+                                                     data = [{suite,"ets_bench"},
+                                                             {name, iolib:format("Scenario: %p, # of processes: %p", [Scenario, ThreadCount])},
+                                                             {value,Throughput}]})
                                     end,
                                     ThreadCounts),
                                   io:format("$~n",[])
@@ -6778,7 +6807,7 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs) ->
     end.
 
 test_throughput_benchmark(Config) when is_list(Config) ->
-    throughput_benchmark(true, 100, 0).
+    throughput_benchmark(true, 100, 0, not_set, not_set).
 
 
 add_lists(L1,L2) ->
