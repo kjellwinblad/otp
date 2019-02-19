@@ -2365,7 +2365,7 @@ accumulate(Eterm acc, Uint size)
 	 * bignum buffer with one extra word to be used if
 	 * the bignum grows in the future.
 	 */
-	Eterm* hp = (Eterm *) erts_alloc(ERTS_ALC_T_TEMP_TERM,
+	Eterm* hp = (Eterm *) erts_alloc(ERTS_ALC_T_SHORT_LIVED_TERM,
 					 (BIG_UINT_HEAP_SIZE+1) *
 					 sizeof(Eterm));
 	return uint_to_big(size, hp);
@@ -2385,7 +2385,7 @@ accumulate(Eterm acc, Uint size)
 	     * The extra word has been consumed. Grow the
 	     * allocation by one word.
 	     */
-	    big = (Eterm *) erts_realloc(ERTS_ALC_T_TEMP_TERM,
+	    big = (Eterm *) erts_realloc(ERTS_ALC_T_SHORT_LIVED_TERM,
 					 big_val(acc),
 					 (need_heap+1) * sizeof(Eterm));
 	    acc = make_big(big);
@@ -2414,7 +2414,7 @@ consolidate(Process* p, Eterm acc, Uint size)
 	while (sz--) {
 	    *hp++ = *big++;
 	}
-	erts_free(ERTS_ALC_T_TEMP_TERM, (void *) big_val(acc));
+	erts_free(ERTS_ALC_T_SHORT_LIVED_TERM, (void *) big_val(acc));
 	return res;
     }
 }
@@ -2431,6 +2431,9 @@ typedef struct {
 static int iolist_size_ctx_bin_dtor(Binary *context_bin) {
     ErtsIOListSizeContext* context = ERTS_MAGIC_BIN_DATA(context_bin);
     DESTROY_SAVED_ESTACK(&context->stack);
+    if (context->acc != THE_NON_VALUE) {
+        erts_free(ERTS_ALC_T_SHORT_LIVED_TERM, (void *) big_val(context->acc));
+    }
     return 1;
 }
 
@@ -2548,10 +2551,21 @@ BIF_RETTYPE iolist_size_1(BIF_ALIST_1)
     DESTROY_ESTACK(s);
     BUMP_REDS(BIF_P, (max_iterations - iterations_until_trap) / ITERATIONS_PER_RED);
     ASSERT(!(BIF_P->flags & F_DISABLE_GC));
+    if (context != NULL) {
+        /* context->acc needs to be reset so that
+           iolist_size_ctx_bin_dtor does not deallocate twice */
+        context->acc = THE_NON_VALUE;
+    }
     BIF_RET(consolidate(BIF_P, acc, size));
 
  L_type_error:
     DESTROY_ESTACK(s);
+    if (acc != THE_NON_VALUE) {
+	erts_free(ERTS_ALC_T_SHORT_LIVED_TERM, (void *) big_val(acc));
+        if (context != NULL) {
+            context->acc = THE_NON_VALUE;
+        }
+    }
     BUMP_REDS(BIF_P, (max_iterations - iterations_until_trap) / ITERATIONS_PER_RED);
     ASSERT(!(BIF_P->flags & F_DISABLE_GC));
     if (context == NULL) {
