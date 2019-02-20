@@ -6610,14 +6610,18 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs, ThreadCountsOpt, T
                 receive
                     {get_data, Pid} -> Pid ! {ets_bench_data, Data};
                     D -> DataHolderFun([Data,D])
-                end,
+                end
         end,
     DataHolderPid = spawn(fun()-> DataHolder([]) end),
     PrintData =
-        fun PrintDataFun(Str, List) ->
+        fun (Str, List) ->
                 io:format(Str, List),
-                DataHolderPid ! iolib:format(Str, List);
-            PrintDataFun(Str) -> PrintDataFun(Str, [])
+                DataHolderPid ! iolib:format(Str, List)
+        end,
+    GetData =
+        fun () -> 
+                DataHolderPid ! {get_data, self()},
+                receive {ets_bench_data, Data} -> Data end
         end,
     %%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -6750,7 +6754,7 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs, ThreadCountsOpt, T
                  false -> ok
              end,
     %% Run the benchmark
-    PrintData("", "# Each instance of the benchmark runs for ~w seconds:~n", [Duration/1000]),
+    PrintData("# Each instance of the benchmark runs for ~w seconds:~n", [Duration/1000]),
     PrintData("# The result of a benchmark instance is presented as a number representing~n"),
     PrintData("# the number of operations performed per second:~n~n~n"),
     PrintData("# To plot graphs for the results below:~n"),
@@ -6764,18 +6768,18 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs, ThreadCountsOpt, T
       fun(KeyRange) ->
               lists:foreach(
                 fun(Scenario) ->
-                        io:format("Scenario: ~s | Key Range Size: ~w$~n",
+                        PrintData("Scenario: ~s | Key Range Size: ~w$~n",
                                   [RenderScenario(Scenario, ""),
                                    KeyRange]),
                         lists:foreach(
                           fun(ThreadCount) ->
-                                  io:format("; ~w",[ThreadCount])                       
+                                  PrintData("; ~w",[ThreadCount])
                           end,
                           ThreadCounts),
-                        io:format("$~n",[]),
+                        PrintData("$~n",[]),
                         lists:foreach(
                           fun(TableType) ->
-                                  io:format("~w ",[TableType]),
+                                  PrintData("~w ",[TableType]),
                                   lists:foreach(
                                     fun(ThreadCount) ->
                                             Result = RunBenchmark(ThreadCount,
@@ -6785,7 +6789,7 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs, ThreadCountsOpt, T
                                                                   Duration,
                                                                   TimeMsToSleepAfterEachBenchmarkRun),
                                             Throughput = Result/(Duration/1000.0),
-                                            io:format("; ~f",[Throughput]),
+                                            PrintData("; ~f",[Throughput]),
                                             ct_event:notify(
                                               #event{name = benchmark_data, 
                                                      data = [{suite,"ets_bench"},
@@ -6793,18 +6797,24 @@ throughput_benchmark(TestMode, BenchmarkRunMs, RecoverTimeMs, ThreadCountsOpt, T
                                                              {value,Throughput}]})
                                     end,
                                     ThreadCounts),
-                                  io:format("$~n",[])
+                                  PrintData("$~n",[])
                           end,
                           TableTypes)
                 end,
                 Scenarios)
       end,
       KeyRanges),
-    io:format("~n#BENCHMARK ENDED$~n~n"),
+    PrintData("~n#BENCHMARK ENDED$~n~n"),
     case TestMode of
         true -> verify_etsmem(EtsMem);
         false -> ok
-    end.
+    end,
+    DataDir = filename:join(filename:dirname(code:which(?MODULE)), "ets_SUITE_data"),
+    TemplatePath = filename:join(DataDir, "visualize_throughput.html"),
+    {ok, Template} = file:read_file(TemplatePath),
+    OutputData = string:replace(Template, "#bench_data_placeholder", GetData()),
+    OutputPath = filename:join(DataDir, "ets_bench_result.html"),
+    file:write_file(OutputPath, OutputData).
 
 test_throughput_benchmark(Config) when is_list(Config) ->
     throughput_benchmark(true, 100, 0, not_set, not_set).
