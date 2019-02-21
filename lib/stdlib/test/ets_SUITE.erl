@@ -68,7 +68,10 @@
 -export([smp_insert/1, smp_fixed_delete/1, smp_unfix_fix/1, smp_select_delete/1,
          smp_ordered_iteration/1,
          smp_select_replace/1, otp_8166/1, otp_8732/1, delete_unfix_race/1]).
--export([throughput_benchmark/0, test_throughput_benchmark/1, test_scalability_benchmark/1]).
+-export([throughput_benchmark/0,
+         throughput_benchmark/1,
+         test_throughput_benchmark/1,
+         long_throughput_benchmark/1]).
 -export([exit_large_table_owner/1,
 	 exit_many_large_table_owner/1,
 	 exit_many_tables_owner/1,
@@ -150,7 +153,7 @@ all() ->
      whereis_table,
      delete_unfix_race,
      test_throughput_benchmark,
-     test_scalability_benchmark].
+     {group, benchmark}].
 
 groups() ->
     [{new, [],
@@ -178,7 +181,9 @@ groups() ->
      {meta_smp, [],
       [meta_lookup_unnamed_read, meta_lookup_unnamed_write,
        meta_lookup_named_read, meta_lookup_named_write,
-       meta_newdel_unnamed, meta_newdel_named]}].
+       meta_newdel_unnamed, meta_newdel_named]},
+     {benchmark, [],
+      [throughput_benchmark]}].
 
 init_per_suite(Config) ->
     erts_debug:set_internal_state(available_internal_state, true),
@@ -6416,7 +6421,6 @@ whereis_table(Config) when is_list(Config) ->
 
     ok.
 
-
 %% The following work functions are used by
 %% throughput_benchmark. They are declared on the top level beacuse
 %% declaring them as function local funs cause a scalability issue.
@@ -6453,17 +6457,131 @@ prefill_table_loop(T, RS0, N, ObjFun) ->
     ets:insert(T, ObjFun(Key)),
     prefill_table_loop(T, RS1, N-1, ObjFun).
 
-throughput_benchmark() -> 
-    throughput_benchmark(false, not_set, not_set, not_set, not_set, not_set, not_set, false).
+-record(ets_throughput_bench_config,
+        {benchmark_duration_ms = 3000,
+         recover_time_ms = 1000,
+         thread_counts = not_set,
+         key_ranges = [1000000],
+         scenarios =
+             [
+              [
+               {0.5, insert},
+               {0.5, delete}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.8, lookup}
+              ],
+              [
+               {0.01, insert},
+               {0.01, delete},
+               {0.98, lookup}
+              ],
+              [
+               {1.0, lookup}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.4, lookup},
+               {0.4, nextseq10}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.4, lookup},
+               {0.4, nextseq100}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.4, lookup},
+               {0.4, nextseq1000}
+              ],
+              [
+               {1.0, nextseq1000}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.79, lookup},
+               {0.01, selectAll}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.7999, lookup},
+               {0.0001, selectAll}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.799999, lookup},
+               {0.000001, selectAll}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.79, lookup},
+               {0.01, partial_select1000}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.7999, lookup},
+               {0.0001, partial_select1000}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.799999, lookup},
+               {0.000001, partial_select1000}
+              ]
+             ],
+         table_types =
+             [
+              [ordered_set, public],
+              [ordered_set, public, {write_concurrency, true}],
+              [ordered_set, public, {read_concurrency, true}],
+              [ordered_set, public, {write_concurrency, true}, {read_concurrency, true}],
+              [set, public],
+              [set, public, {write_concurrency, true}],
+              [set, public, {read_concurrency, true}],
+              [set, public, {write_concurrency, true}, {read_concurrency, true}]
+             ],
+         etsmem_fun = fun() -> ok end,
+         verify_etsmem_fun = fun(_) -> true end,
+         notify_res_fun = fun(_Name, _Throughput) -> ok end,
+         print_result_paths_fun =
+             fun(ResultPath, _LatestResultPath) ->
+                     Comment = 
+                         io_lib:format("<a href=\"file:///~s\">Result visualization</a>",[ResultPath]),
+                     {comment, Comment}
+             end
+       }).
 
-throughput_benchmark(TestMode,
-                     BenchmarkRunMs,
-                     RecoverTimeMs, 
-                     ThreadCountsOpt, 
-                     KeyRangesOpt, 
-                     ScenariosOpt,
-                     TableTypesOpt, 
-                     EnableCTEventNotify) ->
+throughput_benchmark() -> 
+    throughput_benchmark(
+      #ets_throughput_bench_config{
+         print_result_paths_fun = 
+             fun(ResultPath, LatestResultPath) ->
+                     io:format("Result Location: /~s~n", [ResultPath]),
+                     io:format("Latest Result Location: ~s~n", [LatestResultPath])
+             end}).
+
+throughput_benchmark(
+  #ets_throughput_bench_config{
+     benchmark_duration_ms  = BenchmarkDurationMs,
+     recover_time_ms        = RecoverTimeMs, 
+     thread_counts          = ThreadCountsOpt, 
+     key_ranges             = KeyRanges, 
+     scenarios              = Scenarios,
+     table_types            = TableTypes,
+     etsmem_fun             = ETSMemFun,
+     verify_etsmem_fun      = VerifyETSMemFun,
+     notify_res_fun         = NotifyResFun,
+     print_result_paths_fun = PrintResultPathsFun}) ->
     NrOfSchedulers = erlang:system_info(schedulers),
     %% Definitions of operations that are supported by the benchmark
     NextSeqOp =
@@ -6528,7 +6646,7 @@ throughput_benchmark(TestMode,
               fun(T,KeyRange) -> NextSeqOp(T,KeyRange,1000) end,
           selectAll =>
               fun(T,_KeyRange) -> 
-                      case -1 =:= ets:select_count(T, ets:fun2ms(fun(X) -> true end)) of  
+                      case -1 =:= ets:select_count(T, ets:fun2ms(fun(_X) -> true end)) of  
                           true -> io:format("Will never be printed");
                           false -> ok
                       end
@@ -6584,7 +6702,7 @@ throughput_benchmark(TestMode,
                     D -> DataHolderFun([Data,D])
                 end
         end,
-    DataHolderPid = spawn(fun()-> DataHolder([]) end),
+    DataHolderPid = spawn_link(fun()-> DataHolder([]) end),
     PrintData =
         fun (Str, List) ->
                 io:format(Str, List),
@@ -6606,16 +6724,15 @@ throughput_benchmark(TestMode,
                 Nobj = ets:info(Table, size),
                 SafeFixTableIfRequired(Table, Scenario, true),
                 ParentPid = self(),
+                Worker =
+                    fun() ->
+                            receive start -> ok end,
+                            WorksDone =
+                                do_work(0, Table, ProbHelpTab, Range, Operations),
+                            ParentPid ! WorksDone
+                    end,
                 ChildPids =
-                    lists:map(
-                      fun(_N) -> 
-                              spawn(fun() ->
-                                            receive start -> ok end,
-                                            WorksDone =
-                                                do_work(0, Table, ProbHelpTab, Range, Operations),
-                                            ParentPid ! WorksDone
-                                    end)
-                      end, lists:seq(1, NrOfProcs)),
+                    lists:map(fun(_N) ->spawn_link(Worker)end, lists:seq(1, NrOfProcs)),
                 lists:foreach(fun(Pid) -> Pid ! start end, ChildPids),
                 timer:sleep(Duration),
                 lists:foreach(fun(Pid) -> Pid ! stop end, ChildPids),
@@ -6633,7 +6750,7 @@ throughput_benchmark(TestMode,
     RunBenchmarkInSepProcess =
         fun(ParameterTuple) ->
                 P = self(),
-                spawn(fun()-> P ! {bench_result, RunBenchmark(ParameterTuple)} end),
+                spawn_link(fun()-> P ! {bench_result, RunBenchmark(ParameterTuple)} end),
                 receive {bench_result, Res} -> Res end
         end,
     RunBenchmarkAndReport =
@@ -6651,158 +6768,19 @@ throughput_benchmark(TestMode,
                                                    TimeMsToSleepAfterEachBenchmarkRun}),
                 Throughput = Result/(Duration/1000.0),
                 PrintData("; ~f",[Throughput]),
-                Name = io_lib:format("Scenario: ~w, # of processes: ~w, type: ~w",
-                                     [Scenario, ThreadCount, TableType]),
-                case EnableCTEventNotify of
-                    true ->
-                        ct_event:notify(
-                          #event{name = benchmark_data, 
-                                 data = [{suite,"ets_bench"},
-                                         {name, Name},
-                                         {value,Throughput}]});
-                    _ -> ok
-                end
+                Name = io_lib:format("Scenario: ~w, # of processes: ~w, type: ~w"
+                                     "Key range size: ~w",
+                                     [Scenario, ThreadCount, TableType, KeyRange]),
+                NotifyResFun(Name, Throughput)
         end,
-    %%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%% Benchmark Configuration %%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%
-    %% Change the following variables to configure the benchmark runs
     ThreadCounts =
         case ThreadCountsOpt of
             not_set ->
-                case TestMode of
-                    true -> [1, NrOfSchedulers];
-                    false -> CalculateThreadCounts([1])
-                end;
+                CalculateThreadCounts([1]);
             _ -> ThreadCountsOpt
         end,
-    KeyRanges = % Sizes of the key ranges
-        case KeyRangesOpt of
-            not_set ->
-                case TestMode of
-                    true -> [50000];
-                    false -> [1000000]
-                end;
-            Ranges -> Ranges
-        end,
-    Duration = 
-        case BenchmarkRunMs of % Duration of a benchmark run in milliseconds
-            not_set -> 30000; 
-            _ -> BenchmarkRunMs
-        end,
-    TimeMsToSleepAfterEachBenchmarkRun = 
-        case RecoverTimeMs of
-            not_set -> 1000; 
-            _ -> RecoverTimeMs
-        end,
-    TableTypes = % The table types that will be benchmarked
-        case TableTypesOpt of
-            not_set -> 
-                [
-                 [ordered_set, public],
-                 [ordered_set, public, {write_concurrency, true}],
-                 [ordered_set, public, {read_concurrency, true}],
-                 [ordered_set, public, {write_concurrency, true}, {read_concurrency, true}],
-                 [set, public],
-                 [set, public, {write_concurrency, true}],
-                 [set, public, {read_concurrency, true}],
-                 [set, public, {write_concurrency, true}, {read_concurrency, true}]
-                ];
-            _ -> TableTypesOpt
-        end,
-    Scenarios = % Benchmark scenarios (the fractions should add up to approximately 1.0)
-        case ScenariosOpt of
-            not_set ->
-                [
-                 [
-                  {0.5, insert},
-                  {0.5, delete}
-                 ],
-                 [
-                  {0.1, insert},
-                  {0.1, delete},
-                  {0.8, lookup}
-                 ],
-                 [
-                  {0.01, insert},
-                  {0.01, delete},
-                  {0.98, lookup}
-                 ],
-                 [
-                  {1.0, lookup}
-                 ],
-                 [
-                  {0.1, insert},
-                  {0.1, delete},
-                  {0.4, lookup},
-                  {0.4, nextseq10}
-                 ],
-                 [
-                  {0.1, insert},
-                  {0.1, delete},
-                  {0.4, lookup},
-                  {0.4, nextseq100}
-                 ],
-                 [
-                  {0.1, insert},
-                  {0.1, delete},
-                  {0.4, lookup},
-                  {0.4, nextseq1000}
-                 ],
-                 [
-                  {1.0, nextseq1000}
-                 ],
-                 [
-                  {0.1, insert},
-                  {0.1, delete},
-                  {0.79, lookup},
-                  {0.01, selectAll}
-                 ],
-                 [
-                  {0.1, insert},
-                  {0.1, delete},
-                  {0.7999, lookup},
-                  {0.0001, selectAll}
-                 ],
-                 [
-                  {0.1, insert},
-                  {0.1, delete},
-                  {0.799999, lookup},
-                  {0.000001, selectAll}
-                 ],
-                 [
-                  {0.1, insert},
-                  {0.1, delete},
-                  {0.79, lookup},
-                  {0.01, partial_select1000}
-                 ],
-                 [
-                  {0.1, insert},
-                  {0.1, delete},
-                  {0.7999, lookup},
-                  {0.0001, partial_select1000}
-                 ],
-                 [
-                  {0.1, insert},
-                  {0.1, delete},
-                  {0.799999, lookup},
-                  {0.000001, partial_select1000}
-                 ]
-                ];
-            _ -> ScenariosOpt
-        end,
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%% End of Benchmark Configuration  %%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% Prepare for memory check
-    EtsMem = case TestMode of
-                 true -> etsmem();
-                 false -> ok
-             end,
     %% Run the benchmark
-    PrintData("# Each instance of the benchmark runs for ~w seconds:~n", [Duration/1000]),
+    PrintData("# Each instance of the benchmark runs for ~w seconds:~n", [BenchmarkDurationMs/1000]),
     PrintData("# The result of a benchmark instance is presented as a number representing~n",[]),
     PrintData("# the number of operations performed per second:~n~n~n",[]),
     PrintData("# To plot graphs for the results below:~n",[]),
@@ -6811,6 +6789,7 @@ throughput_benchmark(TestMode,
     PrintData("# 3. Paste the lines copied in step 2 to the text box in the browser window opened in~n",[]),
     PrintData("#    step 1 and press the Render button~n~n",[]),
     PrintData("#BENCHMARK STARTED$~n",[]),
+    EtsMem = ETSMemFun(),
     %% The following loop runs all benchmark scenarios and prints the results (i.e, operations/second)
     lists:foreach(
       fun(KeyRange) ->
@@ -6833,8 +6812,8 @@ throughput_benchmark(TestMode,
                                                                   TableType,
                                                                   Scenario,
                                                                   KeyRange,
-                                                                  Duration,
-                                                                  TimeMsToSleepAfterEachBenchmarkRun)
+                                                                  BenchmarkDurationMs,
+                                                                  RecoverTimeMs)
                                     end,
                                     ThreadCounts),
                                   PrintData("$~n",[])
@@ -6845,10 +6824,7 @@ throughput_benchmark(TestMode,
       end,
       KeyRanges),
     PrintData("~n#BENCHMARK ENDED$~n~n",[]),
-    case TestMode of
-        true -> verify_etsmem(EtsMem);
-        false -> ok
-    end,
+    VerifyETSMemFun(EtsMem),
     DataDir = filename:join(filename:dirname(code:which(?MODULE)), "ets_SUITE_data"),
     TemplatePath = filename:join(DataDir, "visualize_throughput.html"),
     {ok, Template} = file:read_file(TemplatePath),
@@ -6859,56 +6835,73 @@ throughput_benchmark(TestMode,
     OutputPath2 = filename:join(DataDir, io_lib:format("ets_bench_result_~s.html", [StrTime])),
     file:write_file(OutputPath1, OutputData),
     file:write_file(OutputPath2, OutputData),
-    {comment, io_lib:format("<a href=\"~s\">Result visualization</a>",[OutputPath2])}.
+    PrintResultPathsFun(OutputPath2, OutputPath1).
 
 test_throughput_benchmark(Config) when is_list(Config) ->
-    throughput_benchmark(true, 100, 0, not_set, not_set, not_set, not_set, false).
+    throughput_benchmark(
+      #ets_throughput_bench_config{
+         benchmark_duration_ms = 100, 
+         recover_time_ms = 0,
+         thread_counts = [1, erlang:system_info(schedulers)],
+         key_ranges = [50000],
+         etsmem_fun = fun etsmem/0,
+         verify_etsmem_fun = fun verify_etsmem/1}).
 
-test_scalability_benchmark(Config) when is_list(Config) ->
+long_throughput_benchmark(Config) when is_list(Config) ->
     N = erlang:system_info(schedulers),
-    ThreadCounts = [1, N div 2, N],
-    TableTypes = [
-                  [ordered_set, public, {write_concurrency, true}, {read_concurrency, true}],
-                  %%[ordered_set, public, {write_concurrency, true}],
-                  [set, public, {write_concurrency, true}, {read_concurrency, true}]
-                  %%[set, public, {write_concurrency, true}]
-                 ],
-    KeyRanges = [1000000],
-    Scenarios =    
-        [
-         [
-          {0.1, insert},
-          {0.1, delete},
-          {0.8, lookup}
-         ],
-         [
-          {0.01, insert},
-          {0.01, delete},
-          {0.98, lookup}
-         ],
-         [
-          {0.1, insert},
-          {0.1, delete},
-          {0.4, lookup},
-          {0.4, nextseq100}
-         ],
-         [
-          {0.1, insert},
-          {0.1, delete},
-          {0.79, lookup},
-          {0.01, selectAll}
-         ],
-         [
-          {0.1, insert},
-          {0.1, delete},
-          {0.79, lookup},
-          {0.01, partial_select1000}
-         ]
-        ],
-    RunTime = 1000,
-    RecoverTime = 100,
-    throughput_benchmark(false, RunTime, RecoverTime, ThreadCounts, KeyRanges, Scenarios, TableTypes, true).
-
+    throughput_benchmark(
+      #ets_throughput_bench_config{
+         benchmark_duration_ms = 3000, 
+         recover_time_ms = 1000,
+         thread_counts = [1, N div 2, N],
+         key_ranges = [1000000],
+         scenarios = 
+             [
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.8, lookup}
+              ],
+              [
+               {0.01, insert},
+               {0.01, delete},
+               {0.98, lookup}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.4, lookup},
+               {0.4, nextseq100}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.79, lookup},
+               {0.01, selectAll}
+              ],
+              [
+               {0.1, insert},
+               {0.1, delete},
+               {0.79, lookup},
+               {0.01, partial_select1000}
+              ]
+             ],
+         table_types = 
+             [
+              [ordered_set, public, {write_concurrency, true}, {read_concurrency, true}],
+              [set, public, {write_concurrency, true}, {read_concurrency, true}]
+             ],
+         etsmem_fun = fun etsmem/0,
+         verify_etsmem_fun = fun verify_etsmem/1,
+         notify_res_fun = 
+             fun(Name, Throughput) -> 
+                     ct_event:notify(
+                          #event{name = benchmark_data, 
+                                 data = [{suite,"ets_bench"},
+                                         {name, Name},
+                                         {value,Throughput}]})
+             end
+        }).
 
 add_lists(L1,L2) ->
     add_lists(L1,L2,[]).
