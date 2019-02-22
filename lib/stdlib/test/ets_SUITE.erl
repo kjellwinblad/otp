@@ -6561,14 +6561,14 @@ prefill_table_loop(T, RS0, N, ObjFun) ->
              end
        }).
 
+stdout_notify_res(ResultPath, LatestResultPath) ->
+    io:format("Result Location: /~s~n", [ResultPath]),
+    io:format("Latest Result Location: ~s~n", [LatestResultPath]).
+
 throughput_benchmark() -> 
     throughput_benchmark(
       #ets_throughput_bench_config{
-         print_result_paths_fun = 
-             fun(ResultPath, LatestResultPath) ->
-                     io:format("Result Location: /~s~n", [ResultPath]),
-                     io:format("Latest Result Location: ~s~n", [LatestResultPath])
-             end}).
+         print_result_paths_fun = fun stdout_notify_res/2}).
 
 throughput_benchmark(
   #ets_throughput_bench_config{
@@ -6750,8 +6750,9 @@ throughput_benchmark(
         fun(ParameterTuple) ->
                 P = self(),
                 spawn_link(fun()-> P ! {bench_result, RunBenchmark(ParameterTuple)} end),
-                receive {bench_result, Res} -> Res end,
-                timer:sleep(RecoverTimeMs)
+                Result = receive {bench_result, Res} -> Res end,
+                timer:sleep(RecoverTimeMs),
+                Result
         end,
     RunBenchmarkAndReport =
         fun(ThreadCount,
@@ -6810,8 +6811,7 @@ throughput_benchmark(
                                                                   TableType,
                                                                   Scenario,
                                                                   KeyRange,
-                                                                  BenchmarkDurationMs,
-                                                                  RecoverTimeMs)
+                                                                  BenchmarkDurationMs)
                                     end,
                                     ThreadCounts),
                                   PrintData("$~n",[])
