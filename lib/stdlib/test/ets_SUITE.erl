@@ -6716,7 +6716,7 @@ throughput_benchmark(
     %% Function that runs a benchmark instance and returns the number
     %% of operations that were performed
     RunBenchmark =
-        fun({NrOfProcs, TableConfig, Scenario, Range, Duration, RecoverTime}) ->
+        fun({NrOfProcs, TableConfig, Scenario, Range, Duration}) ->
                 ProbHelpTab = CalculateOpsProbHelpTab(Scenario, 0),
                 Table = ets:new(t, TableConfig),
                 Nobj = Range div 2,
@@ -6744,33 +6744,31 @@ throughput_benchmark(
                                    end, 0, ChildPids),
                 SafeFixTableIfRequired(Table, Scenario, false),
                 ets:delete(Table),
-                timer:sleep(RecoverTime),
                 TotalWorksDone
         end,
     RunBenchmarkInSepProcess =
         fun(ParameterTuple) ->
                 P = self(),
                 spawn_link(fun()-> P ! {bench_result, RunBenchmark(ParameterTuple)} end),
-                receive {bench_result, Res} -> Res end
+                receive {bench_result, Res} -> Res end,
+                timer:sleep(RecoverTimeMs)
         end,
     RunBenchmarkAndReport =
         fun(ThreadCount,
             TableType,
             Scenario,
             KeyRange,
-            Duration,
-            TimeMsToSleepAfterEachBenchmarkRun) ->
+            Duration) ->
                 Result = RunBenchmarkInSepProcess({ThreadCount,
                                                    TableType,
                                                    Scenario,
                                                    KeyRange,
-                                                   Duration,
-                                                   TimeMsToSleepAfterEachBenchmarkRun}),
+                                                   Duration}),
                 Throughput = Result/(Duration/1000.0),
                 PrintData("; ~f",[Throughput]),
-                Name = io_lib:format("Scenario: ~w, # of processes: ~w, type: ~w"
-                                     "Key range size: ~w",
-                                     [Scenario, ThreadCount, TableType, KeyRange]),
+                Name = io_lib:format("Scenario: ~w, Key Range Size: ~w, "
+                                     "# of Processes: ~w, Table Type: ~w",
+                                     [Scenario, KeyRange, ThreadCount, TableType]),
                 NotifyResFun(Name, Throughput)
         end,
     ThreadCounts =
