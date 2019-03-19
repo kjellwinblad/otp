@@ -1245,12 +1245,7 @@ static int make_hash2_ctx_bin_dtor(Binary *context_bin) {
 }
 
 /* hash2_save_trap_state is called seldom so we want to avoid inlining */
-#ifdef __GNUC__
-#  define NOINLINE_HASH2_SAVE_TRAP_STATE __attribute__((__noinline__))
-#else
-#  define NOINLINE_HASH2_SAVE_TRAP_STATE
-#endif
-static NOINLINE_HASH2_SAVE_TRAP_STATE
+static ERTS_NOINLINE
 Eterm hash2_save_trap_state(Eterm state_mref,
                             Uint32 hash_xor_pairs,
                             Uint32 hash,
@@ -1673,11 +1668,10 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
 		    } else {
 #define BH_NUM BLOCK_HASH_BYTES_PER_ITER
 #define MAX_BINARY_BUF_SIZE (BH_NUM*1024)
-#define MAX_ITERATIONS_UNTIL_TRAP (MAX_BINARY_BUF_SIZE / BH_NUM)
 #define BYTE_BITS 8
 #define BUF_SIZE() (ctx.nr_of_bytes > MAX_BINARY_BUF_SIZE ? MAX_BINARY_BUF_SIZE: ctx.nr_of_bytes)                        
                         ErtsBlockHashHelperContext* block_hash_ctx = &ctx.block_hash_ctx;
-                        ASSERT(MAX_BINARY_BUF_SIZE % BH_NUM == 0);
+                        ERTS_CT_ASSERT(MAX_BINARY_BUF_SIZE % BH_NUM == 0);
                         ctx.nr_of_bytes = ctx.sz + (ctx.bitsize != 0);
                         ctx.buf = (byte *) erts_alloc(ERTS_ALC_T_TMP, BUF_SIZE());
                         ctx.is_tmp_alloc = 1;
@@ -1726,7 +1720,7 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
                         } while (block_hash_ctx->has_trapped);
                         if (ctx.bitsize > 0) {
                             UINT32_HASH_2(ctx.bitsize,
-                                          (ctx.buf[ctx.sz - (ctx.block_index - 1) * MAX_BINARY_BUF_SIZE] >> (8 - ctx.bitsize)),
+                                          (ctx.buf[ctx.sz - (ctx.block_index - 1) * MAX_BINARY_BUF_SIZE] >> (BYTE_BITS - ctx.bitsize)),
                                           HCONST_15);
                         }
                         if (ctx.is_tmp_alloc) {
@@ -1736,7 +1730,6 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
                             context->trap_location_state.sub_binary_subtag_2.buf = NULL;
                         }
 #undef MAX_BINARY_BUF_SIZE
-#undef MAX_ITERATIONS_UNTIL_TRAP
 #undef BYTE_BITS
 #undef BUF_SIZE
 #undef BH_NUM

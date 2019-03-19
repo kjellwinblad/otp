@@ -35,6 +35,7 @@
 	 phash2_test/0, otp_5292_test/0,
          otp_7127_test/0, 
          run_phash2_benchmarks/0,
+         test_phash2_large_map/1,
          test_phash2_shallow_long_list/1,
          test_phash2_deep_list/1,
          test_phash2_deep_tuple/1,
@@ -104,6 +105,7 @@ all() ->
 
 get_phash2_benchmarks() ->
     [
+     test_phash2_large_map,
      test_phash2_shallow_long_list,
      test_phash2_deep_list,
      test_phash2_deep_tuple,
@@ -752,6 +754,7 @@ id(I) -> I.
 
 run_phash2_benchmarks() ->
     Benchmarks = [
+                  test_phash2_large_map,
                   test_phash2_shallow_long_list,
                   test_phash2_deep_list,
                   test_phash2_deep_tuple,
@@ -779,6 +782,11 @@ nr_of_iters(BenchmarkNumberOfIterations, Config) ->
         false -> BenchmarkNumberOfIterations
     end.
                      
+
+test_phash2_large_map(Config) when is_list(Config) ->
+    run_phash2_test_and_benchmark(nr_of_iters(45, Config), 
+                                  get_large_map(),
+                                  121857429).
 
 test_phash2_shallow_long_list(Config) when is_list(Config) ->
     run_phash2_test_and_benchmark(nr_of_iters(1, Config), 
@@ -964,6 +972,16 @@ get_complex_tuple() ->
      #{a => 1, b => 2, c => 3, d => 4, e => 5, f => 6, g => 7, h => 8, i => 9,
        j => 1, k => 1, l => 123123123123213, m => [1,2,3,4,5,6,7,8], o => 5, p => 6,
        q => 7, r => 8, s => 9}}.
+
+get_large_map_helper(MapSoFar, 0) ->
+    MapSoFar;
+get_large_map_helper(MapSoFar, NumOfItemsToAdd) ->
+    NewMapSoFar = maps:put(NumOfItemsToAdd, NumOfItemsToAdd, MapSoFar),
+    get_large_map_helper(NewMapSoFar, NumOfItemsToAdd -1).
+
+get_large_map() ->
+    get_large_map_helper(#{}, 1000000).
+
 
 %% Copied from binary_SUITE
 make_unaligned_sub_binary(Bin0) when is_binary(Bin0) ->
