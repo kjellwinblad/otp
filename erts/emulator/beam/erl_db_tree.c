@@ -68,11 +68,6 @@
 #define IS_CENTRALIZED_CTR(tb) (!(tb)->common.counters.is_decentralized)
 #define APPROX_MEM_CONSUMED(tb) erts_flxctr_read_approx(&(tb)->common.counters, ERTS_DB_TABLE_MEM_COUNTER_ID)
 
-
-#if defined(ARCH_32)
-#define TREE_MAX_ELEMENTS 0xFFFFFFFFUL
-#endif
-
 #define TOPN_NODE(Dtt, Pos)                   \
      (((Pos) < Dtt->pos) ? 			\
       (Dtt)->array[(Dtt)->pos - ((Pos) + 1)] : NULL)
@@ -680,16 +675,7 @@ int db_put_tree_common(DbTableCommon *tb, TreeDbTerm **root, Eterm obj,
     for (;;)
 	if (!*this) { /* Found our place */
 	    state = 1;
-#if defined(ARCH_32)
-            if (INC_NITEMS_CENTRALIZED((DbTable*)tb) >= TREE_MAX_ELEMENTS) {
-                DEC_NITEMS((DbTable*)tb);
-		return DB_ERROR_SYSRES;
-            }
-#elif defined(ARCH_64)
             INC_NITEMS(((DbTable*)tb));
-#else
-#error "Usupported architecture"
-#endif
 	    *this = new_dbterm(tb, obj);
 	    (*this)->balance = 0;
 	    (*this)->left = (*this)->right = NULL;

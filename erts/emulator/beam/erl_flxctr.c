@@ -27,8 +27,6 @@
 static int reader_groups_array_size = 0;
 #define ERTS_FLXCTR_DECENTRALIZED_NO_SLOTS (reader_groups_array_size)
 
-#define FIX_WARN(ARRAY_FIELD) ((erts_atomic_t*)ARRAY_FIELD)
-
 static int erts_flxctr_read_ctx_bin_dtor(Binary *context_bin);
 static int erts_flxctr_wait_dtor(Binary *context_bin);
 
@@ -196,7 +194,7 @@ void erts_flxctr_init(ErtsFlxCtr* c,
     } else {
         int i;
         for (i = 0; i < nr_of_counters; i++) {
-            erts_atomic_init_nob(&FIX_WARN(c->u.counters)[i], 0);
+            erts_atomic_init_nob(&c->u.counters[i], 0);
         }
     }
 }

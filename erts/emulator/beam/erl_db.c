@@ -414,13 +414,9 @@ free_dbtable(void *vtb)
 
     if (tb->common.btid)
         erts_bin_release(tb->common.btid);
-    {
-        DbTable tmp_tb = *tb;
-        /* erts_db_free changes the memory counter so the order of the
-           two statements below matters */
-        erts_db_free(ERTS_ALC_T_DB_TABLE, tb, (void *) tb, sizeof(DbTable));
-        erts_flxctr_destroy(&tmp_tb.common.counters, ERTS_ALC_T_DB_TABLE);
-    }
+
+    erts_flxctr_destroy(&tb->common.counters, ERTS_ALC_T_DB_TABLE);
+    erts_free(ERTS_ALC_T_DB_TABLE, tb);
 }
 
 static void schedule_free_dbtable(DbTable* tb)
