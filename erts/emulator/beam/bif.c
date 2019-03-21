@@ -2463,6 +2463,8 @@ BIF_RETTYPE iolist_size_1(BIF_ALIST_1)
     ErtsIOListSizeContext* context = NULL;
     Eterm state_mref;
     int is_trap_at_L_iter_list;
+    /* gcc 4.8.2 emits a false positive warning without the statement below */
+    ERTS_UNDEF(state_mref, THE_NON_VALUE);
     ESTACK_CHANGE_ALLOCATOR(s, ERTS_ALC_T_SAVED_ESTACK);
 #ifdef DEBUG
     iterations_until_trap = iterations_until_trap / 10;
