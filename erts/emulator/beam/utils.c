@@ -1070,76 +1070,87 @@ do {                               \
 #define HCONST 0x9e3779b9UL /* the golden ratio; an arbitrary value */
 
 typedef struct {
-    byte *k;
-    Uint32 initval;
-    Uint length;
-    int has_trapped;
-    /* The following is relevant when has_trapped != 0: */
     Uint32 a,b,c;
-    Uint len;
-    long iterations_until_trap;
-} ErtsBlockHashHelperContext;
+} ErtsBlockHashHelperCtx;
 
 #define BLOCK_HASH_BYTES_PER_ITER 12
 
-static
-Uint32 block_hash_helper(ErtsBlockHashHelperContext* ctx,
-                         const int can_trap)
+/* The three functions below are separated into different functions even
+   though they are always used together to make trapping and handling
+   of unaligned binaries easier. Examples of how they are used can be
+   found in block_hash and make_hash2_helper.*/
+static ERTS_INLINE
+void block_hash_setup(Uint32 initval,
+                      ErtsBlockHashHelperCtx* ctx /* out parameter */)
 {
-    if (can_trap && ctx->has_trapped) {
-       goto trap_wake_up_location;
-   }
-   /* Set up the internal state */
-   ctx->len = ctx->length;
-   ctx->a = ctx->b = HCONST;
-   ctx->c = ctx->initval;           /* the previous hash value */
-
-   while (ctx->len >= BLOCK_HASH_BYTES_PER_ITER)
-   {
-      ctx->a += (ctx->k[0] +((Uint32)ctx->k[1]<<8) +((Uint32)ctx->k[2]<<16) +((Uint32)ctx->k[3]<<24));
-      ctx->b += (ctx->k[4] +((Uint32)ctx->k[5]<<8) +((Uint32)ctx->k[6]<<16) +((Uint32)ctx->k[7]<<24));
-      ctx->c += (ctx->k[8] +((Uint32)ctx->k[9]<<8) +((Uint32)ctx->k[10]<<16)+((Uint32)ctx->k[11]<<24));
-      MIX(ctx->a,ctx->b,ctx->c);
-      ctx->k += BLOCK_HASH_BYTES_PER_ITER; ctx->len -= BLOCK_HASH_BYTES_PER_ITER;
-      if (can_trap) {
-          ctx->iterations_until_trap--;
-          if(ctx->iterations_until_trap <= 0) {
-              ctx->has_trapped = 1;
-              return 0;
-          trap_wake_up_location:
-              ctx->has_trapped = 0;
-          }
-      }
-   }
-   ctx->c += ctx->length;
-   switch(ctx->len)              /* all the case statements fall through */
-   {
-   case 11: ctx->c+=((Uint32)ctx->k[10]<<24);
-   case 10: ctx->c+=((Uint32)ctx->k[9]<<16);
-   case 9 : ctx->c+=((Uint32)ctx->k[8]<<8);
-      /* the first byte of c is reserved for the length */
-   case 8 : ctx->b+=((Uint32)ctx->k[7]<<24);
-   case 7 : ctx->b+=((Uint32)ctx->k[6]<<16);
-   case 6 : ctx->b+=((Uint32)ctx->k[5]<<8);
-   case 5 : ctx->b+=ctx->k[4];
-   case 4 : ctx->a+=((Uint32)ctx->k[3]<<24);
-   case 3 : ctx->a+=((Uint32)ctx->k[2]<<16);
-   case 2 : ctx->a+=((Uint32)ctx->k[1]<<8);
-   case 1 : ctx->a+=ctx->k[0];
-     /* case 0: nothing left to add */
-   }
-   MIX(ctx->a,ctx->b,ctx->c);
-   return ctx->c;
+    ctx->a = ctx->b = HCONST;
+    ctx->c = initval;           /* the previous hash value */
 }
 
-Uint32
-block_hash(byte *k, Uint length, Uint32 initval)
+static ERTS_INLINE
+void block_hash_buffer(byte *buf,
+                       Uint buf_length,
+                       ErtsBlockHashHelperCtx* ctx /* out parameter */)
 {
-    ErtsBlockHashHelperContext context = {
-        .k = k,
-        .length = length,
-        .initval = initval};
-    return block_hash_helper(&context, 0);
+    Uint len = buf_length;
+    byte *k = buf;
+    ASSERT(buf_length % BLOCK_HASH_BYTES_PER_ITER == 0);
+    while (len >= BLOCK_HASH_BYTES_PER_ITER) {
+        ctx->a += (k[0] +((Uint32)k[1]<<8) +((Uint32)k[2]<<16) +((Uint32)k[3]<<24));
+        ctx->b += (k[4] +((Uint32)k[5]<<8) +((Uint32)k[6]<<16) +((Uint32)k[7]<<24));
+        ctx->c += (k[8] +((Uint32)k[9]<<8) +((Uint32)k[10]<<16)+((Uint32)k[11]<<24));
+        MIX(ctx->a,ctx->b,ctx->c);
+        k += BLOCK_HASH_BYTES_PER_ITER; len -= BLOCK_HASH_BYTES_PER_ITER;
+    }
+}
+
+static ERTS_INLINE
+Uint32 block_hash_final_bytes(byte *buf,
+                              Uint buf_length,
+                              Uint full_length,
+                              ErtsBlockHashHelperCtx* ctx)
+{
+    Uint len = buf_length;
+    byte *k = buf;
+    ctx->c += full_length;
+    switch(len)
+    { /* all the case statements fall through */      
+    case 11: ctx->c+=((Uint32)k[10]<<24);
+    case 10: ctx->c+=((Uint32)k[9]<<16);
+    case 9 : ctx->c+=((Uint32)k[8]<<8);
+    /* the first byte of c is reserved for the length */
+    case 8 : ctx->b+=((Uint32)k[7]<<24);
+    case 7 : ctx->b+=((Uint32)k[6]<<16);
+    case 6 : ctx->b+=((Uint32)k[5]<<8);
+    case 5 : ctx->b+=k[4];
+    case 4 : ctx->a+=((Uint32)k[3]<<24);
+    case 3 : ctx->a+=((Uint32)k[2]<<16);
+    case 2 : ctx->a+=((Uint32)k[1]<<8);
+    case 1 : ctx->a+=k[0];
+    /* case 0: nothing left to add */
+    }
+    MIX(ctx->a,ctx->b,ctx->c);
+    return ctx->c;
+}
+
+
+Uint32
+block_hash(byte *block, Uint block_length, Uint32 initval)
+{
+    ErtsBlockHashHelperCtx ctx;
+    Uint no_bytes_not_in_loop =
+        (block_length % BLOCK_HASH_BYTES_PER_ITER);
+    Uint no_bytes_to_process_in_loop =
+        block_length - no_bytes_not_in_loop;
+    byte *final_bytes = block + no_bytes_to_process_in_loop;
+    block_hash_setup(initval, &ctx);
+    block_hash_buffer(block,
+                      no_bytes_to_process_in_loop,
+                      &ctx);
+    return block_hash_final_bytes(final_bytes,
+                                  no_bytes_not_in_loop,
+                                  block_length,
+                                  &ctx);
 }
 
 typedef enum {
@@ -1197,12 +1208,11 @@ typedef struct {
     unsigned sz;
     Uint bitsize;
     Uint bitoffs;
-    ErtsBlockHashHelperContext block_hash_ctx;
+    unsigned no_bytes_processed;
+    ErtsBlockHashHelperCtx block_hash_ctx;
     /* The following fields are only used when bitoffs != 0 */
     byte* buf;
-    Uint block_index;
-    Uint nr_of_bytes;
-    int is_tmp_alloc;
+    int done;
 
 } ErtsMakeHash2Context_SUB_BINARY_SUBTAG;
 
@@ -1422,7 +1432,7 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
 #ifdef DEBUG
         (void)ITERATIONS_PER_RED;
         iterations_until_trap = max_iterations =
-            (1103515245 * (ERTS_BIF_REDS_LEFT(p)) + 12345)  % 1171;
+            (1103515245 * (ERTS_BIF_REDS_LEFT(p)) + 12345)  % 227;
 #else
         iterations_until_trap = max_iterations =
             ITERATIONS_PER_RED * ERTS_BIF_REDS_LEFT(p);
@@ -1634,109 +1644,140 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
 	    case HEAP_BINARY_SUBTAG:
 	    case SUB_BINARY_SUBTAG:
 	    {
+#define BYTE_BITS 8
                 ErtsMakeHash2Context_SUB_BINARY_SUBTAG ctx = {
                     .bptr = 0,
                     .sz = binary_size(term),
                     .bitsize = 0,
-                    .bitoffs = 0
+                    .bitoffs = 0,
+                    .no_bytes_processed = 0
                 };
 		Uint32 con = HCONST_13 + hash;
-
+                unsigned iters_for_bin = MAX(1, ctx.sz / BLOCK_HASH_BYTES_PER_ITER);
 		ERTS_GET_BINARY_BYTES(term, ctx.bptr, ctx.bitoffs, ctx.bitsize);
 		if (ctx.sz == 0 && ctx.bitsize == 0) {
 		    hash = con;
-		} else {
-		    if (ctx.bitoffs == 0) {
-                        ErtsBlockHashHelperContext* block_hash_ctx = &ctx.block_hash_ctx;
-                        block_hash_ctx->k = ctx.bptr;
-                        block_hash_ctx->length = ctx.sz;
-                        block_hash_ctx->initval = con;
-                        block_hash_ctx->has_trapped = 0;
-                        do {
-                            block_hash_ctx->iterations_until_trap = iterations_until_trap;
-
-                            hash = block_hash_helper(block_hash_ctx, 1);
-
-                            iterations_until_trap = block_hash_ctx->iterations_until_trap;
-                            TRAP_LOCATION_NO_RED(sub_binary_subtag_1);
-                            block_hash_ctx = &ctx.block_hash_ctx;
-                        } while (block_hash_ctx->has_trapped);
-			if (ctx.bitsize > 0) {
-			    UINT32_HASH_2(ctx.bitsize, (ctx.bptr[ctx.sz] >> (8 - ctx.bitsize)),
-					  HCONST_15);
-			}
-		    } else {
-#define BH_NUM BLOCK_HASH_BYTES_PER_ITER
-#define MAX_BINARY_BUF_SIZE (BH_NUM*1024)
-#define BYTE_BITS 8
-#define BUF_SIZE() (ctx.nr_of_bytes > MAX_BINARY_BUF_SIZE ? MAX_BINARY_BUF_SIZE: ctx.nr_of_bytes)                        
-                        ErtsBlockHashHelperContext* block_hash_ctx = &ctx.block_hash_ctx;
-                        ERTS_CT_ASSERT(MAX_BINARY_BUF_SIZE % BH_NUM == 0);
-                        ctx.nr_of_bytes = ctx.sz + (ctx.bitsize != 0);
-                        ctx.buf = (byte *) erts_alloc(ERTS_ALC_T_TMP, BUF_SIZE());
-                        ctx.is_tmp_alloc = 1;
-                        block_hash_ctx->length = ctx.sz;
-                        block_hash_ctx->initval = con;
-                        ctx.block_index = 0;
-                        block_hash_ctx->has_trapped = 0;
-                        do {
-                            int is_last_block = (1+ctx.block_index)*MAX_BINARY_BUF_SIZE >= ctx.nr_of_bytes;
-                            size_t nr_of_bits_to_copy;
-                            if (is_last_block) {
-                                nr_of_bits_to_copy = ctx.sz*BYTE_BITS+ctx.bitsize -
-                                    ctx.block_index * MAX_BINARY_BUF_SIZE*BYTE_BITS;
-                                /* Set block_hash_ctx->iterations_until_trap so that block_hash_helper
-                                   do not trap in the last block.*/
-                                block_hash_ctx->iterations_until_trap = LONG_MAX;
-                                iterations_until_trap -=
-                                    2 * (ctx.nr_of_bytes - ctx.block_index * MAX_BINARY_BUF_SIZE) / BH_NUM;
-                            } else {
-                                nr_of_bits_to_copy = MAX_BINARY_BUF_SIZE*BYTE_BITS;
-                                /* Set block_hash_ctx->iterations_until_trap so that block_hash_helper
-                                   traps just before reaching the end of the buffer.*/
-                                block_hash_ctx->iterations_until_trap = MAX_BINARY_BUF_SIZE/BH_NUM;
-                                iterations_until_trap -= 2 * (MAX_BINARY_BUF_SIZE/BH_NUM);
-                            }
-                            erts_copy_bits(ctx.bptr + ctx.block_index*MAX_BINARY_BUF_SIZE,
-                                           ctx.bitoffs, 1, ctx.buf, 0, 1, nr_of_bits_to_copy);
-                            block_hash_ctx->k = ctx.buf;
-
-                            hash = block_hash_helper(block_hash_ctx, 1);
-
-                            ctx.block_index++;
-                            if (can_trap) {
-                                if(iterations_until_trap <= 0 && ctx.is_tmp_alloc) {
-                                    size_t buf_size = BUF_SIZE();
-                                    byte* new_buf = (byte *) erts_alloc(ERTS_ALC_T_PHASH2_TRAP, buf_size);
-                                    sys_memcpy(new_buf, ctx.buf, buf_size);
-                                    block_hash_ctx->k = new_buf + (block_hash_ctx->k - ctx.buf);
-                                    erts_free(ERTS_ALC_T_TMP, (void *) ctx.buf);
-                                    ctx.buf = new_buf;
-                                    ctx.is_tmp_alloc = 0;
-                                }
-                                TRAP_LOCATION_NO_RED(sub_binary_subtag_2);
-                                block_hash_ctx = &ctx.block_hash_ctx;
-                            }
-                        } while (block_hash_ctx->has_trapped);
-                        if (ctx.bitsize > 0) {
-                            UINT32_HASH_2(ctx.bitsize,
-                                          (ctx.buf[ctx.sz - (ctx.block_index - 1) * MAX_BINARY_BUF_SIZE] >> (BYTE_BITS - ctx.bitsize)),
-                                          HCONST_15);
-                        }
-                        if (ctx.is_tmp_alloc) {
-                            erts_free(ERTS_ALC_T_TMP, ctx.buf);
-                        } else {
-                            erts_free(ERTS_ALC_T_PHASH2_TRAP, ctx.buf);
-                            context->trap_location_state.sub_binary_subtag_2.buf = NULL;
-                        }
-#undef MAX_BINARY_BUF_SIZE
-#undef BYTE_BITS
-#undef BUF_SIZE
-#undef BH_NUM
-#undef BLOCK_HASH_BYTES_PER_ITER
-		    }
+		} else if (ctx.bitoffs == 0 &&
+                           (!can_trap ||
+                            (iterations_until_trap - iters_for_bin) > 0)) {
+                    /* No need to trap while hashing binary */
+                    if (can_trap) iterations_until_trap -= iters_for_bin;
+                    hash = block_hash(ctx.bptr, ctx.sz, con);
+                    if (ctx.bitsize > 0) {
+                        UINT32_HASH_2(ctx.bitsize,
+                                      (ctx.bptr[ctx.sz] >> (BYTE_BITS - ctx.bitsize)),
+                                      HCONST_15);
+                    }
+                } else if (ctx.bitoffs == 0) {
+                    /* Need to trap while hasing binary */
+                    ErtsBlockHashHelperCtx* block_hash_ctx = &ctx.block_hash_ctx;
+                    block_hash_setup(con, block_hash_ctx);
+                    do {
+                        unsigned max_bytes_to_process =
+                            iterations_until_trap <= 0 ? BLOCK_HASH_BYTES_PER_ITER :
+                            iterations_until_trap * BLOCK_HASH_BYTES_PER_ITER;
+                        unsigned bytes_left = ctx.sz - ctx.no_bytes_processed;
+                        unsigned even_bytes_left =
+                            bytes_left - (bytes_left % BLOCK_HASH_BYTES_PER_ITER);
+                        unsigned bytes_to_process =
+                            MIN(max_bytes_to_process, even_bytes_left);
+                        block_hash_buffer(&ctx.bptr[ctx.no_bytes_processed],
+                                          bytes_to_process,
+                                          block_hash_ctx);
+                        ctx.no_bytes_processed += bytes_to_process;
+                        iterations_until_trap -=
+                            MAX(1, bytes_to_process / BLOCK_HASH_BYTES_PER_ITER);
+                        TRAP_LOCATION_NO_RED(sub_binary_subtag_1);
+                        block_hash_ctx = &ctx.block_hash_ctx; /* Restore after trap */
+                    } while ((ctx.sz - ctx.no_bytes_processed) >=
+                             BLOCK_HASH_BYTES_PER_ITER);
+                    hash = block_hash_final_bytes(ctx.bptr +
+                                                  ctx.no_bytes_processed,
+                                                  ctx.sz - ctx.no_bytes_processed,
+                                                  ctx.sz,
+                                                  block_hash_ctx);
+                    if (ctx.bitsize > 0) {
+                        UINT32_HASH_2(ctx.bitsize,
+                                      (ctx.bptr[ctx.sz] >> (BYTE_BITS - ctx.bitsize)),
+                                      HCONST_15);
+                    }
+                } else if (/* ctx.bitoffs != 0 && */
+                           (!can_trap ||
+                            (iterations_until_trap - iters_for_bin) > 0)) {
+                    /* No need to trap while hashing binary */
+                    unsigned nr_of_bytes = ctx.sz + (ctx.bitsize != 0);
+                    byte *buf = erts_alloc(ERTS_ALC_T_TMP, nr_of_bytes);
+                    size_t nr_of_bits_to_copy = ctx.sz*BYTE_BITS+ctx.bitsize;
+                    if (can_trap) iterations_until_trap -= iters_for_bin;
+                    erts_copy_bits(ctx.bptr,
+                                   ctx.bitoffs, 1, buf, 0, 1, nr_of_bits_to_copy);
+                    hash = block_hash(buf, ctx.sz, con);
+                    if (ctx.bitsize > 0) {
+                        UINT32_HASH_2(ctx.bitsize,
+                                      (buf[ctx.sz] >> (BYTE_BITS - ctx.bitsize)),
+                                      HCONST_15);
+                    }
+                    erts_free(ERTS_ALC_T_TMP, buf);
+                } else /* ctx.bitoffs != 0 && */ {
+#ifdef DEBUG
+#define BINARY_BUF_SIZE (BLOCK_HASH_BYTES_PER_ITER * 3)
+#else
+#define BINARY_BUF_SIZE (BLOCK_HASH_BYTES_PER_ITER * 256)
+#endif
+#define BINARY_BUF_SIZE_BITS (BINARY_BUF_SIZE*BYTE_BITS)
+                    /* Need to trap while hashing binary */
+                    ErtsBlockHashHelperCtx* block_hash_ctx = &ctx.block_hash_ctx;
+                    unsigned nr_of_bytes = ctx.sz + (ctx.bitsize != 0);
+                    ERTS_CT_ASSERT(BINARY_BUF_SIZE % BLOCK_HASH_BYTES_PER_ITER == 0);
+                    ctx.buf = erts_alloc(ERTS_ALC_T_PHASH2_TRAP,
+                                         MIN(nr_of_bytes, BINARY_BUF_SIZE));
+                    block_hash_setup(con, block_hash_ctx);
+                    do {
+                        unsigned bytes_left =
+                            ctx.sz - ctx.no_bytes_processed;
+                        unsigned even_bytes_left =
+                            bytes_left - (bytes_left % BLOCK_HASH_BYTES_PER_ITER);
+                        unsigned bytes_to_process =
+                            MIN(BINARY_BUF_SIZE, even_bytes_left);
+                        size_t nr_of_bits_left =
+                            (ctx.sz*BYTE_BITS+ctx.bitsize) -
+                            ctx.no_bytes_processed*BYTE_BITS; 
+                        size_t nr_of_bits_to_copy =
+                            MIN(nr_of_bits_left, BINARY_BUF_SIZE_BITS);
+                        ctx.done = nr_of_bits_left == nr_of_bits_to_copy;
+                        erts_copy_bits(ctx.bptr + ctx.no_bytes_processed,
+                                       ctx.bitoffs, 1, ctx.buf, 0, 1,
+                                       nr_of_bits_to_copy);
+                        block_hash_buffer(ctx.buf,
+                                          bytes_to_process,
+                                          block_hash_ctx);
+                        ctx.no_bytes_processed += bytes_to_process;
+                        iterations_until_trap -=
+                            MAX(1, bytes_to_process / BLOCK_HASH_BYTES_PER_ITER);
+                        TRAP_LOCATION_NO_RED(sub_binary_subtag_2);
+                        block_hash_ctx = &ctx.block_hash_ctx; /* Restore after trap */
+                    } while (!ctx.done);
+                    nr_of_bytes = ctx.sz + (ctx.bitsize != 0);
+                    hash = block_hash_final_bytes(ctx.buf +
+                                                  (ctx.no_bytes_processed -
+                                                   ((nr_of_bytes-1) / BINARY_BUF_SIZE) *  BINARY_BUF_SIZE),
+                                                  ctx.sz - ctx.no_bytes_processed,
+                                                  ctx.sz,
+                                                  block_hash_ctx);
+                    if (ctx.bitsize > 0) {
+                        size_t last_byte_index =
+                            nr_of_bytes - (((nr_of_bytes-1) / BINARY_BUF_SIZE) *  BINARY_BUF_SIZE) -1;
+                        UINT32_HASH_2(ctx.bitsize,
+                                      (ctx.buf[last_byte_index] >> (BYTE_BITS - ctx.bitsize)),
+                                      HCONST_15);
+                    }
+                    erts_free(ERTS_ALC_T_PHASH2_TRAP, ctx.buf);
+                    context->trap_location_state.sub_binary_subtag_2.buf = NULL;
 		}
 		goto hash2_common;
+#undef BYTE_BITS
+#undef BINARY_BUF_SIZE
+#undef BINARY_BUF_SIZE_BITS
 	    }
 	    break;
 	    case POS_BIG_SUBTAG:

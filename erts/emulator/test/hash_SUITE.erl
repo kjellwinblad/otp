@@ -35,6 +35,7 @@
 	 phash2_test/0, otp_5292_test/0,
          otp_7127_test/0, 
          run_phash2_benchmarks/0,
+         test_phash2_binary_aligned_and_unaligned_equal/1,
          test_phash2_large_map/1,
          test_phash2_shallow_long_list/1,
          test_phash2_deep_list/1,
@@ -100,7 +101,8 @@ suite() ->
 all() -> 
     [test_basic, test_cmp, test_range, test_spread,
      test_phash2, otp_5292, bit_level_binaries, otp_7127,
-     test_hash_zero, {group, phash2_benchmark_tests},
+     test_hash_zero, test_phash2_binary_aligned_and_unaligned_equal,
+     {group, phash2_benchmark_tests},
      {group, phash2_benchmark}].
 
 get_phash2_benchmarks() ->
@@ -488,6 +490,39 @@ phash2_test() ->
     [] = D,
     [] = [{E,H,H2} || {E,H} <- L, (H2 = erlang:phash2(E, Max)) =/= H],
     ok.
+
+test_aligned_and_unaligned_equal(BinSize) ->
+    Bin = make_random_bin(BinSize),
+    NotLastByteSize = (erlang:bit_size(Bin)) - 8,
+    <<_:NotLastByteSize/bitstring, LastByte:8>> = Bin,
+    LastInBitstring = LastByte rem 11,
+    Bitstring = << Bin/binary, <<LastInBitstring:5>>/bitstring >>,
+    UnalignedBin = make_unaligned_sub_bitstring(Bin),
+    UnalignedBitstring = make_unaligned_sub_bitstring(Bitstring),
+    BinHash = erlang:phash2(Bin),
+    UnalignedBinHash = erlang:phash2(UnalignedBin),
+    BinHash = UnalignedBinHash,
+    BitstringHash = erlang:phash2(Bitstring),
+    UnalignedBitstringHash = erlang:phash2(UnalignedBitstring),
+    BitstringHash = UnalignedBitstringHash,
+    {BinHash, BitstringHash}.
+
+
+
+test_aligned_and_unaligned_equal_up_to(BinSize) ->
+    Results = 
+        lists:map(fun(Size) -> 
+                          test_aligned_and_unaligned_equal(Size) 
+                  end, lists:seq(1, BinSize)),
+    DataDir = filename:join(filename:dirname(code:which(?MODULE)), "hash_SUITE_data"),
+    ExpResFile = filename:join(DataDir, "phash2_bin_expected_results.txt"),
+    {ok, [ExpRes]} = file:consult(ExpResFile),
+    %% ok = file:write_file(ExpResFile, io_lib:format("~w.~n", [Results])),
+    Results = ExpRes,
+    ok.
+
+test_phash2_binary_aligned_and_unaligned_equal(Config) when is_list(Config) ->
+    test_aligned_and_unaligned_equal_up_to(256*12+255).
 
 -ifdef(FALSE).
 f1() ->
@@ -988,6 +1023,12 @@ make_unaligned_sub_binary(Bin0) when is_binary(Bin0) ->
     Bin1 = <<0:3,Bin0/binary,31:5>>,
     Sz = size(Bin0),
     <<0:3,Bin:Sz/binary,31:5>> = id(Bin1),
+    Bin.
+
+make_unaligned_sub_bitstring(Bin0) ->
+    Bin1 = <<0:3,Bin0/bitstring,31:5>>,
+    Sz = erlang:bit_size(Bin0),
+    <<0:3,Bin:Sz/bitstring,31:5>> = id(Bin1),
     Bin.
 
 make_random_bin(Size) ->
