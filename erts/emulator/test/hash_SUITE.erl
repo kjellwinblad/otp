@@ -36,6 +36,7 @@
          otp_7127_test/0, 
          run_phash2_benchmarks/0,
          test_phash2_binary_aligned_and_unaligned_equal/1,
+         test_phash2_4GB_plus_bin/1,
          test_phash2_large_map/1,
          test_phash2_shallow_long_list/1,
          test_phash2_deep_list/1,
@@ -92,7 +93,8 @@ notify(X) ->
 -export([groups/0, all/0, suite/0,
 	 test_basic/1,test_cmp/1,test_range/1,test_spread/1,
 	 test_phash2/1,otp_5292/1,bit_level_binaries/1,otp_7127/1,
-         test_hash_zero/1, init_per_group/2, end_per_group/2]).
+         test_hash_zero/1, init_per_suite/1, end_per_suite/1,
+         init_per_group/2, end_per_group/2]).
 
 suite() ->
     [{ct_hooks,[ts_install_cth]},
@@ -102,6 +104,7 @@ all() ->
     [test_basic, test_cmp, test_range, test_spread,
      test_phash2, otp_5292, bit_level_binaries, otp_7127,
      test_hash_zero, test_phash2_binary_aligned_and_unaligned_equal,
+     test_phash2_4GB_plus_bin,
      {group, phash2_benchmark_tests},
      {group, phash2_benchmark}].
 
@@ -136,6 +139,25 @@ groups() ->
       get_phash2_benchmarks()
      }
     ].
+
+
+init_per_suite(Config) ->
+    io:format("START APPS~n"),
+    A0 = case application:start(sasl) of
+	     ok -> [sasl];
+	     _ -> []
+	 end,
+    A = case application:start(os_mon) of
+	     ok -> [os_mon|A0];
+	     _ -> A0
+	 end,
+    io:format("APPS STARTED~n"),
+    [{started_apps, A}|Config].
+
+end_per_suite(Config) ->
+    As = proplists:get_value(started_apps, Config),
+    lists:foreach(fun (A) -> application:stop(A) end, As),
+    Config.
 
 init_per_group(phash2_benchmark_tests, Config) ->
     [phash2_benchmark_tests |Config];
@@ -491,38 +513,125 @@ phash2_test() ->
     [] = [{E,H,H2} || {E,H} <- L, (H2 = erlang:phash2(E, Max)) =/= H],
     ok.
 
-test_aligned_and_unaligned_equal(BinSize) ->
-    Bin = make_random_bin(BinSize),
-    NotLastByteSize = (erlang:bit_size(Bin)) - 8,
-    <<_:NotLastByteSize/bitstring, LastByte:8>> = Bin,
-    LastInBitstring = LastByte rem 11,
-    Bitstring = << Bin/binary, <<LastInBitstring:5>>/bitstring >>,
-    UnalignedBin = make_unaligned_sub_bitstring(Bin),
-    UnalignedBitstring = make_unaligned_sub_bitstring(Bitstring),
-    BinHash = erlang:phash2(Bin),
-    UnalignedBinHash = erlang:phash2(UnalignedBin),
-    BinHash = UnalignedBinHash,
-    BitstringHash = erlang:phash2(Bitstring),
-    UnalignedBitstringHash = erlang:phash2(UnalignedBitstring),
-    BitstringHash = UnalignedBitstringHash,
-    {BinHash, BitstringHash}.
-
-
+test_phash2_binary_aligned_and_unaligned_equal(Config) when is_list(Config) ->
+    erts_debug:set_internal_state(available_internal_state, true),
+    test_aligned_and_unaligned_equal_up_to(256*12+255),
+    erts_debug:set_internal_state(available_internal_state, false).
 
 test_aligned_and_unaligned_equal_up_to(BinSize) ->
     Results = 
         lists:map(fun(Size) -> 
                           test_aligned_and_unaligned_equal(Size) 
                   end, lists:seq(1, BinSize)),
-    DataDir = filename:join(filename:dirname(code:which(?MODULE)), "hash_SUITE_data"),
-    ExpResFile = filename:join(DataDir, "phash2_bin_expected_results.txt"),
-    {ok, [ExpRes]} = file:consult(ExpResFile),
-    %% ok = file:write_file(ExpResFile, io_lib:format("~w.~n", [Results])),
-    Results = ExpRes,
-    ok.
+    %% DataDir = filename:join(filename:dirname(code:which(?MODULE)), "hash_SUITE_data"),
+    %% ExpResFile = filename:join(DataDir, "phash2_bin_expected_results.txt"),
+    %% {ok, [ExpRes]} = file:consult(ExpResFile),
+    %% %% ok = file:write_file(ExpResFile, io_lib:format("~w.~n", [Results])),    
+    %% Results = ExpRes,
+    110469206 = erlang:phash2(Results).
 
-test_phash2_binary_aligned_and_unaligned_equal(Config) when is_list(Config) ->
-    test_aligned_and_unaligned_equal_up_to(256*12+255).
+test_aligned_and_unaligned_equal(BinSize) ->
+    Bin = make_random_bin(BinSize),
+    LastByte = last_byte(Bin),
+    LastInBitstring = LastByte rem 11,
+    Bitstring = << Bin/binary, <<LastInBitstring:5>>/bitstring >>,
+    UnalignedBin = make_unaligned_sub_bitstring(Bin),
+    UnalignedBitstring = make_unaligned_sub_bitstring(Bitstring),
+    case erts_debug:get_internal_state(available_internal_state) of
+        false -> erts_debug:set_internal_state(available_internal_state, true);
+        _ -> ok
+    end,
+    erts_debug:set_internal_state(reds_left, 3),
+    BinHash = erlang:phash2(Bin),
+    BinHash = erlang:phash2(Bin),
+    erts_debug:set_internal_state(reds_left, 3),
+    UnalignedBinHash = erlang:phash2(UnalignedBin),
+    UnalignedBinHash = erlang:phash2(UnalignedBin),
+    BinHash = UnalignedBinHash,
+    erts_debug:set_internal_state(reds_left, 3),
+    BitstringHash = erlang:phash2(Bitstring),
+    BitstringHash = erlang:phash2(Bitstring),
+    erts_debug:set_internal_state(reds_left, 3),
+    UnalignedBitstringHash = erlang:phash2(UnalignedBitstring),
+    UnalignedBitstringHash = erlang:phash2(UnalignedBitstring),
+    BitstringHash = UnalignedBitstringHash,
+    {BinHash, BitstringHash}.
+
+last_byte(Bin) ->
+    NotLastByteSize = (erlang:bit_size(Bin)) - 8,
+    <<_:NotLastByteSize/bitstring, LastByte:8>> = Bin,
+    LastByte.
+
+test_phash2_4GB_plus_bin(Config) when is_list(Config) ->
+    run_when_enough_resources(
+      fun() ->
+              erts_debug:set_internal_state(available_internal_state, true),
+              %% Created Bin4GB here so it only needs to be created once
+              Bin4GB = get_4GB_bin(),
+              test_phash2_4GB_plus_bin_helper1(Bin4GB, <<>>, <<>>),
+              test_phash2_4GB_plus_bin_helper1(Bin4GB, make_random_bin(65535), <<>>),
+              test_phash2_4GB_plus_bin_helper1(Bin4GB, make_random_bin(655), <<3:5>>),
+              erts_debug:set_internal_state(force_gc, self()),
+              erts_debug:set_internal_state(available_internal_state, false)
+      end).
+
+get_4GB_bin() ->
+    TmpBin = make_random_bin(65535),
+    Bin = erlang:iolist_to_binary([0, TmpBin]),
+    IOList4GB = duplicate_iolist(Bin, 16),
+    Bin4GB = erlang:iolist_to_binary(IOList4GB),
+    4294967296 = size(Bin4GB),
+    Bin4GB.
+
+duplicate_iolist(IOList, 0) ->
+    IOList;
+duplicate_iolist(IOList, NrOfTimes) ->
+    duplicate_iolist([IOList, IOList], NrOfTimes - 1).
+
+test_phash2_4GB_plus_bin_helper1(Bin4GB, ExtraBytes, ExtraBits) ->
+    test_phash2_4GB_plus_bin_helper2(Bin4GB, fun id/1, ExtraBytes, ExtraBits),
+    test_phash2_4GB_plus_bin_helper2(Bin4GB, fun make_unaligned_sub_bitstring/1, ExtraBytes, ExtraBits).
+
+test_phash2_4GB_plus_bin_helper2(Bin4GB, TransformerFun, ExtraBytes, ExtraBits) ->
+    ExtraBitstring = << ExtraBytes/binary, ExtraBits/bitstring >>,
+    LargerBitstring = << ExtraBytes/binary, 
+                         ExtraBits/bitstring,
+                         Bin4GB/bitstring >>,
+    LargerTransformedBitstring = TransformerFun(LargerBitstring),
+    true = (size(ExtraBitstring) < 4294967296),
+    ExtraBitstringHash = erlang:phash2(ExtraBitstring),
+    true = (size(LargerTransformedBitstring) >= 4294967296),            
+    ExtraBitstringHash = erlang:phash2(LargerTransformedBitstring),
+    erts_debug:set_internal_state(force_gc, self()),
+    erts_debug:set_internal_state(reds_left, 3),
+    ExtraBitstringHash = erlang:phash2(LargerTransformedBitstring).
+
+run_when_enough_resources(Fun) ->
+    case {total_memory(), erlang:system_info(wordsize)} of
+        {Mem, 8} when is_integer(Mem) andalso Mem >= 31 ->
+            Fun();
+        {Mem, WordSize} ->
+            {skipped, 
+             io_lib:format("Not enough resources (System Memory >= ~p, Word Size = ~p)",
+                           [Mem, WordSize])}
+    end.
+
+total_memory() ->
+    %% Total memory in GB.
+    try
+	MemoryData = memsup:get_system_memory_data(),
+	case lists:keysearch(total_memory, 1, MemoryData) of
+	    {value, {total_memory, TM}} ->
+		TM div (1024*1024*1024);
+	    false ->
+		{value, {system_total_memory, STM}} =
+		    lists:keysearch(system_total_memory, 1, MemoryData),
+		STM div (1024*1024*1024)
+	end
+    catch
+	_ : _ ->
+	    undefined
+    end.
 
 -ifdef(FALSE).
 f1() ->

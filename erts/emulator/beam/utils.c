@@ -1133,7 +1133,7 @@ Uint32 block_hash_final_bytes(byte *buf,
     return ctx->c;
 }
 
-
+static
 Uint32
 block_hash(byte *block, Uint block_length, Uint32 initval)
 {
@@ -1205,10 +1205,10 @@ typedef struct {
 
 typedef struct {
     byte* bptr;
-    unsigned sz;
+    Uint sz;
     Uint bitsize;
     Uint bitoffs;
-    unsigned no_bytes_processed;
+    Uint no_bytes_processed;
     ErtsBlockHashHelperCtx block_hash_ctx;
     /* The following fields are only used when bitoffs != 0 */
     byte* buf;
@@ -1647,13 +1647,23 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
 #define BYTE_BITS 8
                 ErtsMakeHash2Context_SUB_BINARY_SUBTAG ctx = {
                     .bptr = 0,
-                    .sz = binary_size(term),
+                    /* !!!!!!!!!!!!!!!!!!!! OBS !!!!!!!!!!!!!!!!!!!!
+                     *
+                     * The size is truncated to 32 bits on the line
+                     * below so that the code is compatible with old
+                     * versions of the code. This means that hash
+                     * values for binaries with a size greater than
+                     * 4GB do not take all bytes in consideration.
+                     *
+                     * !!!!!!!!!!!!!!!!!!!! OBS !!!!!!!!!!!!!!!!!!!!
+                     */ 
+                    .sz = (0xFFFFFFFF & binary_size(term)),
                     .bitsize = 0,
                     .bitoffs = 0,
                     .no_bytes_processed = 0
                 };
 		Uint32 con = HCONST_13 + hash;
-                unsigned iters_for_bin = MAX(1, ctx.sz / BLOCK_HASH_BYTES_PER_ITER);
+                Uint iters_for_bin = MAX(1, ctx.sz / BLOCK_HASH_BYTES_PER_ITER);
 		ERTS_GET_BINARY_BYTES(term, ctx.bptr, ctx.bitoffs, ctx.bitsize);
 		if (ctx.sz == 0 && ctx.bitsize == 0) {
 		    hash = con;
@@ -1669,17 +1679,17 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
                                       HCONST_15);
                     }
                 } else if (ctx.bitoffs == 0) {
-                    /* Need to trap while hasing binary */
+                    /* Need to trap while hashing binary */
                     ErtsBlockHashHelperCtx* block_hash_ctx = &ctx.block_hash_ctx;
                     block_hash_setup(con, block_hash_ctx);
                     do {
-                        unsigned max_bytes_to_process =
+                        Uint max_bytes_to_process =
                             iterations_until_trap <= 0 ? BLOCK_HASH_BYTES_PER_ITER :
                             iterations_until_trap * BLOCK_HASH_BYTES_PER_ITER;
-                        unsigned bytes_left = ctx.sz - ctx.no_bytes_processed;
-                        unsigned even_bytes_left =
+                        Uint bytes_left = ctx.sz - ctx.no_bytes_processed;
+                        Uint even_bytes_left =
                             bytes_left - (bytes_left % BLOCK_HASH_BYTES_PER_ITER);
-                        unsigned bytes_to_process =
+                        Uint bytes_to_process =
                             MIN(max_bytes_to_process, even_bytes_left);
                         block_hash_buffer(&ctx.bptr[ctx.no_bytes_processed],
                                           bytes_to_process,
@@ -1705,9 +1715,9 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
                            (!can_trap ||
                             (iterations_until_trap - iters_for_bin) > 0)) {
                     /* No need to trap while hashing binary */
-                    unsigned nr_of_bytes = ctx.sz + (ctx.bitsize != 0);
+                    Uint nr_of_bytes = ctx.sz + (ctx.bitsize != 0);
                     byte *buf = erts_alloc(ERTS_ALC_T_TMP, nr_of_bytes);
-                    size_t nr_of_bits_to_copy = ctx.sz*BYTE_BITS+ctx.bitsize;
+                    Uint nr_of_bits_to_copy = ctx.sz*BYTE_BITS+ctx.bitsize;
                     if (can_trap) iterations_until_trap -= iters_for_bin;
                     erts_copy_bits(ctx.bptr,
                                    ctx.bitoffs, 1, buf, 0, 1, nr_of_bits_to_copy);
@@ -1727,22 +1737,22 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
 #define BINARY_BUF_SIZE_BITS (BINARY_BUF_SIZE*BYTE_BITS)
                     /* Need to trap while hashing binary */
                     ErtsBlockHashHelperCtx* block_hash_ctx = &ctx.block_hash_ctx;
-                    unsigned nr_of_bytes = ctx.sz + (ctx.bitsize != 0);
+                    Uint nr_of_bytes = ctx.sz + (ctx.bitsize != 0);
                     ERTS_CT_ASSERT(BINARY_BUF_SIZE % BLOCK_HASH_BYTES_PER_ITER == 0);
                     ctx.buf = erts_alloc(ERTS_ALC_T_PHASH2_TRAP,
                                          MIN(nr_of_bytes, BINARY_BUF_SIZE));
                     block_hash_setup(con, block_hash_ctx);
                     do {
-                        unsigned bytes_left =
+                        Uint bytes_left =
                             ctx.sz - ctx.no_bytes_processed;
-                        unsigned even_bytes_left =
+                        Uint even_bytes_left =
                             bytes_left - (bytes_left % BLOCK_HASH_BYTES_PER_ITER);
-                        unsigned bytes_to_process =
+                        Uint bytes_to_process =
                             MIN(BINARY_BUF_SIZE, even_bytes_left);
-                        size_t nr_of_bits_left =
+                        Uint nr_of_bits_left =
                             (ctx.sz*BYTE_BITS+ctx.bitsize) -
                             ctx.no_bytes_processed*BYTE_BITS; 
-                        size_t nr_of_bits_to_copy =
+                        Uint nr_of_bits_to_copy =
                             MIN(nr_of_bits_left, BINARY_BUF_SIZE_BITS);
                         ctx.done = nr_of_bits_left == nr_of_bits_to_copy;
                         erts_copy_bits(ctx.bptr + ctx.no_bytes_processed,
@@ -1765,7 +1775,7 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
                                                   ctx.sz,
                                                   block_hash_ctx);
                     if (ctx.bitsize > 0) {
-                        size_t last_byte_index =
+                        Uint last_byte_index =
                             nr_of_bytes - (((nr_of_bytes-1) / BINARY_BUF_SIZE) *  BINARY_BUF_SIZE) -1;
                         UINT32_HASH_2(ctx.bitsize,
                                       (ctx.buf[last_byte_index] >> (BYTE_BITS - ctx.bitsize)),
