@@ -1240,7 +1240,6 @@ typedef struct {
     Eterm term; 
     Uint32 hash;
     Uint32 hash_xor_pairs;
-    Eterm tmp_big[2];
     ErtsEStack stack;
 } ErtsMakeHash2Context;
 
@@ -1261,7 +1260,6 @@ Eterm hash2_save_trap_state(Eterm state_mref,
                             Uint32 hash,
                             Process* p,
                             Eterm term,
-                            Eterm* tmp_big,
                             Eterm* ESTK_DEF_STACK(s),
                             ErtsEStack s,
                             ErtsMakeHash2TrapLocation trap_location,
@@ -1282,8 +1280,6 @@ Eterm hash2_save_trap_state(Eterm state_mref,
     context->term = term;
     context->hash = hash;
     context->hash_xor_pairs = hash_xor_pairs;
-    context->tmp_big[0] = tmp_big[0];
-    context->tmp_big[1] = tmp_big[1];
     ESTACK_SAVE(s, &context->stack);
     context->trap_location = trap_location;
     sys_memcpy(&context->trap_location_state,
@@ -1298,12 +1294,12 @@ Eterm hash2_save_trap_state(Eterm state_mref,
 /* Writes back a magic reference to *state_mref_write_back when the
    function traps */
 static ERTS_INLINE Uint32
-make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, Process* p)
+make_hash2_helper(Eterm term_param, const int can_trap, Eterm* state_mref_write_back, Process* p)
 {
     static const Uint ITERATIONS_PER_RED = 64;
     Uint32 hash;
     Uint32 hash_xor_pairs;
-    Eterm tmp_big[2];
+    Eterm term = term_param;
     ERTS_UNDEF(hash_xor_pairs, 0);
 
 /* (HCONST * {2, ..., 22}) mod 2^32 */
@@ -1370,7 +1366,6 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
                                           hash,                         \
                                           p,                            \
                                           term,                         \
-                                          tmp_big,                      \
                                           ESTK_DEF_STACK(s),            \
                                           s,                            \
                                           location_name,                \
@@ -1408,14 +1403,26 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
 	    break;
 	case _TAG_IMMED1_SMALL:
 	  {
-	      Sint x = signed_val(term);
-
-	      if (SMALL_BITS > 28 && !IS_SSMALL28(x)) {
-		  term = small_to_big(x, tmp_big);
-		  break;
+	      Sint small = signed_val(term);
+	      if (SMALL_BITS > 28 && !IS_SSMALL28(small)) {
+                  Uint t;
+                  Uint32 x, y;
+                  Uint32 con;
+                  if (small < 0) {
+                      con = HCONST_10;
+                      t = (Uint)(small * (-1));
+                  } else {
+                      con = HCONST_11;
+                      t = small;
+                  }
+                  x = t & 0xffffffff;
+                  y = t >> 32;
+                  hash = 0;
+                  UINT32_HASH_2(x, y, con);
+                  return hash;
 	      }
 	      hash = 0;
-	      SINT32_HASH(x, HCONST);
+	      SINT32_HASH(small, HCONST);
 	      return hash;
 	  }
 	}
@@ -1446,10 +1453,8 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
             /* Restore state after a trap */
             context = ERTS_MAGIC_BIN_DATA(state_bin);
             term = context->term;
-            hash = context-> hash;
+            hash = context->hash;
             hash_xor_pairs = context->hash_xor_pairs;
-            tmp_big[0] = context->tmp_big[0];
-            tmp_big[1] = context->tmp_big[1];
             ESTACK_RESTORE(s, &context->stack);
             ASSERT(p->flags & F_DISABLE_GC);
             erts_set_gc_state(p, 1);
@@ -1905,13 +1910,25 @@ make_hash2_helper(Eterm term, const int can_trap, Eterm* state_mref_write_back, 
 		}
 	    case _TAG_IMMED1_SMALL:
 	      {
-		  Sint x = signed_val(term);
+		  Sint small = signed_val(term);
+		  if (SMALL_BITS > 28 && !IS_SSMALL28(small)) {
+                      Uint t;
+                      Uint32 x, y;
+                      Uint32 con;
+                      if (small < 0) {
+                          con = HCONST_10;
+                          t = (Uint)(small * (-1));
+                      } else {
+                          con = HCONST_11;
+                          t = small;
+                      }
+                      x = t & 0xffffffff;
+                      y = t >> 32;
+                      UINT32_HASH_2(x, y, con);
+		  } else {
+		      SINT32_HASH(small, HCONST);
+                  }
 
-		  if (SMALL_BITS > 28 && !IS_SSMALL28(x)) {
-		      term = small_to_big(x, tmp_big);
-		      break;
-		  }
-		  SINT32_HASH(x, HCONST);
 		  goto hash2_common;
 	      }
 	    }
