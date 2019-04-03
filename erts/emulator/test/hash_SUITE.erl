@@ -645,14 +645,23 @@ f3(X, Y) ->
 -endif.
 
 otp_5292_test() ->
-    PH = fun(E) -> [erlang:phash(E, 1 bsl 32),
-                    erlang:phash(-E, 1 bsl 32),
-                    erlang:phash2(E, 1 bsl 32),
-                    erlang:phash2(-E, 1 bsl 32)]
-            end,
+    PH = fun(E) ->
+                 EInList = [1, 2, 3, E],
+                 EInList2 = [E, 1, 2, 3],
+                 NegEInList = [1, 2, 3, -E],
+                 NegEInList2 = [-E, 1, 2, 3],
+                 [erlang:phash(E, 1 bsl 32),
+                  erlang:phash(-E, 1 bsl 32),
+                  erlang:phash2(E, 1 bsl 32),
+                  erlang:phash2(-E, 1 bsl 32),
+                  erlang:phash2(EInList, 1 bsl 32),
+                  erlang:phash2(EInList2, 1 bsl 32),
+                  erlang:phash2(NegEInList, 1 bsl 32),
+                  erlang:phash2(NegEInList2, 1 bsl 32)]
+         end,
     S2 = md5([md5(hash_int(S, E, PH)) || {Start, N, Sz} <- d(),
                                          {S, E} <- int(Start, N, Sz)]),
-    <<124,81,198,121,174,233,19,137,10,83,33,80,226,111,238,99>> = S2,
+    <<234,63,192,76,253,57,250,32,44,11,73,1,161,102,14,238>> = S2,
     ok.
 
 d() ->
