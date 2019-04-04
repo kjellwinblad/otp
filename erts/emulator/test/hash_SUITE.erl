@@ -616,21 +616,21 @@ run_when_enough_resources(Fun) ->
                            [Mem, WordSize])}
     end.
 
+%% Total memory in GB
 total_memory() ->
-    %% Total memory in GB.
     try
-	MemoryData = memsup:get_system_memory_data(),
-	case lists:keysearch(total_memory, 1, MemoryData) of
-	    {value, {total_memory, TM}} ->
-		TM div (1024*1024*1024);
-	    false ->
-		{value, {system_total_memory, STM}} =
-		    lists:keysearch(system_total_memory, 1, MemoryData),
-		STM div (1024*1024*1024)
-	end
+        MemoryData = memsup:get_system_memory_data(),
+        case lists:keysearch(total_memory, 1, MemoryData) of
+            {value, {total_memory, TM}} ->
+        	TM div (1024*1024*1024);
+            false ->
+        	{value, {system_total_memory, STM}} =
+        	    lists:keysearch(system_total_memory, 1, MemoryData),
+        	STM div (1024*1024*1024)
+        end
     catch
-	_ : _ ->
-	    undefined
+        _ : _ ->
+            undefined
     end.
 
 -ifdef(FALSE).
@@ -937,24 +937,52 @@ nr_of_iters(BenchmarkNumberOfIterations, Config) ->
                      
 
 test_phash2_large_map(Config) when is_list(Config) ->
+    {Size, ExpectedHash} =
+        case total_memory() of
+            Mem when is_integer(Mem) andalso Mem > 2 ->
+                {1000000, 121857429};
+            _ ->
+                {1000, 66609305}
+        end,
     run_phash2_test_and_benchmark(nr_of_iters(45, Config), 
-                                  get_large_map(),
-                                  121857429).
+                                  get_map(Size),
+                                  ExpectedHash).
 
 test_phash2_shallow_long_list(Config) when is_list(Config) ->
+    {Size, ExpectedHash} =
+        case total_memory() of
+            Mem when is_integer(Mem) andalso Mem > 2 ->
+                {1000000, 78700388};
+            _ ->
+                {1000, 54749638}
+        end,
     run_phash2_test_and_benchmark(nr_of_iters(1, Config), 
-                                  lists:duplicate(1000000,get_complex_tuple()),
-                                  78700388).
+                                  lists:duplicate(Size, get_complex_tuple()),
+                                  ExpectedHash).
 
 test_phash2_deep_list(Config) when is_list(Config) ->
+    {Size, ExpectedHash} =
+        case total_memory() of
+            Mem when is_integer(Mem) andalso Mem > 2 ->
+                {500000, 17986444};
+            _ ->
+                {1000, 81794308}
+        end,
     run_phash2_test_and_benchmark(nr_of_iters(1, Config),
-                                  make_deep_list(500000, get_complex_tuple()),
-                                  17986444).
+                                  make_deep_list(Size, get_complex_tuple()),
+                                  ExpectedHash).
 
 test_phash2_deep_tuple(Config) when is_list(Config) ->
+    {Size, ExpectedHash} =
+        case total_memory() of
+            Mem when is_integer(Mem) andalso Mem > 2 ->
+                {500000, 116594715};
+            _ ->
+                {500, 109057352}
+        end,
     run_phash2_test_and_benchmark(nr_of_iters(1, Config),
-                                  make_deep_tuple(500000, get_complex_tuple()),
-                                  116594715).
+                                  make_deep_tuple(Size, get_complex_tuple()),
+                                  ExpectedHash).
 
 test_phash2_deep_tiny(Config) when is_list(Config) ->
     run_phash2_test_and_benchmark(nr_of_iters(1000000, Config),
@@ -973,8 +1001,8 @@ test_phash2_with_short_tuple(Config) when is_list(Config) ->
 
 test_phash2_with_short_list(Config) when is_list(Config) ->
     run_phash2_test_and_benchmark(nr_of_iters(10000000, Config),
-                                  {a,b,"hej", "hello"},
-                                  60232670).
+                                  [a,b,"hej", "hello"],
+                                  117108642).
 
 test_phash2_with_tiny_bin(Config) when is_list(Config) ->
     run_phash2_test_and_benchmark(nr_of_iters(20000000, Config),
@@ -992,22 +1020,40 @@ test_phash2_with_small_unaligned_sub_binary(Config) when is_list(Config) ->
                                   130388119).
 
 test_phash2_with_large_bin(Config) when is_list(Config) ->
+    {Size, ExpectedHash} =
+        case total_memory() of
+            Mem when is_integer(Mem) andalso Mem > 2 ->
+                {10000000, 48249379};
+            _ ->
+                {1042, 14679520}
+        end,
     run_phash2_test_and_benchmark(nr_of_iters(150, Config),
-                                  make_random_bin(10000000),
-                                  48249379).
+                                  make_random_bin(Size),
+                                  ExpectedHash).
 
 test_phash2_with_large_unaligned_sub_binary(Config) when is_list(Config) ->
+    {Size, ExpectedHash} =
+        case total_memory() of
+            Mem when is_integer(Mem) andalso Mem > 2 ->
+                {10000001, 122836437};
+            _ ->
+                {10042, 127144287}
+        end,
     run_phash2_test_and_benchmark(nr_of_iters(50, Config),
-                                  make_unaligned_sub_binary(make_random_bin(10000001)),
-                                  122836437).
+                                  make_unaligned_sub_binary(make_random_bin(Size)),
+                                  ExpectedHash).
 
 test_phash2_with_super_large_unaligned_sub_binary(Config) when is_list(Config) ->
+    {Size, ExpectedHash} =
+        case total_memory() of
+            Mem when is_integer(Mem) andalso Mem > 2 ->
+                {20000001, 112086727};
+            _ ->
+                {20042, 91996619}
+        end,
     run_phash2_test_and_benchmark(nr_of_iters(20, Config),
-                                  make_unaligned_sub_binary(make_random_bin(20000001)),
-                                  112086727).
-    
-
-% This breaks the debug emulator make_random_bin(100000001)
+                                  make_unaligned_sub_binary(make_random_bin(Size)),
+                                  ExpectedHash).
 
 make_deep_list(1, Item) ->
     {Item, Item};
@@ -1126,14 +1172,14 @@ get_complex_tuple() ->
        j => 1, k => 1, l => 123123123123213, m => [1,2,3,4,5,6,7,8], o => 5, p => 6,
        q => 7, r => 8, s => 9}}.
 
-get_large_map_helper(MapSoFar, 0) ->
+get_map_helper(MapSoFar, 0) ->
     MapSoFar;
-get_large_map_helper(MapSoFar, NumOfItemsToAdd) ->
+get_map_helper(MapSoFar, NumOfItemsToAdd) ->
     NewMapSoFar = maps:put(NumOfItemsToAdd, NumOfItemsToAdd, MapSoFar),
-    get_large_map_helper(NewMapSoFar, NumOfItemsToAdd -1).
+    get_map_helper(NewMapSoFar, NumOfItemsToAdd -1).
 
-get_large_map() ->
-    get_large_map_helper(#{}, 1000000).
+get_map(Size) ->
+    get_map_helper(#{}, Size).
 
 
 %% Copied from binary_SUITE
