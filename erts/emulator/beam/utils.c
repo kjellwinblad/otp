@@ -1351,6 +1351,23 @@ make_hash2_helper(Eterm term_param, const int can_trap, Eterm* state_mref_write_
 
 #define IS_SSMALL28(x) (((Uint) (((x) >> (28-1)) + 1)) < 2)
 
+#define NOT_SSMALL28_HASH(SMALL)                          \
+    do {                                                  \
+        Uint64 t;                                         \
+        Uint32 x, y;                                      \
+        Uint32 con;                                       \
+        if (SMALL < 0) {                                  \
+            con = HCONST_10;                              \
+            t = (Uint64)(SMALL * (-1));                   \
+        } else {                                          \
+            con = HCONST_11;                              \
+            t = SMALL;                                    \
+        }                                                 \
+        x = t & 0xffffffff;                               \
+        y = t >> 32;                                      \
+        UINT32_HASH_2(x, y, con);                         \
+    } while(0)
+    
 #ifdef ARCH_64
 #  define POINTER_HASH(Ptr, AConst) UINT32_HASH_2((Uint32)(UWord)(Ptr), (((UWord)(Ptr)) >> 32), AConst)
 #else
@@ -1405,20 +1422,8 @@ make_hash2_helper(Eterm term_param, const int can_trap, Eterm* state_mref_write_
 	  {
 	      Sint small = signed_val(term);
 	      if (SMALL_BITS > 28 && !IS_SSMALL28(small)) {
-                  Uint t;
-                  Uint32 x, y;
-                  Uint32 con;
-                  if (small < 0) {
-                      con = HCONST_10;
-                      t = (Uint)(small * (-1));
-                  } else {
-                      con = HCONST_11;
-                      t = small;
-                  }
-                  x = t & 0xffffffff;
-                  y = t >> 32;
                   hash = 0;
-                  UINT32_HASH_2(x, y, con);
+                  NOT_SSMALL28_HASH(small);
                   return hash;
 	      }
 	      hash = 0;
@@ -1912,19 +1917,7 @@ make_hash2_helper(Eterm term_param, const int can_trap, Eterm* state_mref_write_
 	      {
 		  Sint small = signed_val(term);
 		  if (SMALL_BITS > 28 && !IS_SSMALL28(small)) {
-                      Uint t;
-                      Uint32 x, y;
-                      Uint32 con;
-                      if (small < 0) {
-                          con = HCONST_10;
-                          t = (Uint)(small * (-1));
-                      } else {
-                          con = HCONST_11;
-                          t = small;
-                      }
-                      x = t & 0xffffffff;
-                      y = t >> 32;
-                      UINT32_HASH_2(x, y, con);
+                      NOT_SSMALL28_HASH(small);
 		  } else {
 		      SINT32_HASH(small, HCONST);
                   }
