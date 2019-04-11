@@ -519,14 +519,14 @@ test_phash2_binary_aligned_and_unaligned_equal(Config) when is_list(Config) ->
     erts_debug:set_internal_state(available_internal_state, false).
 
 test_aligned_and_unaligned_equal_up_to(BinSize) ->
-    Results = 
-        lists:map(fun(Size) -> 
-                          test_aligned_and_unaligned_equal(Size) 
+    Results =
+        lists:map(fun(Size) ->
+                          test_aligned_and_unaligned_equal(Size)
                   end, lists:seq(1, BinSize)),
     %% DataDir = filename:join(filename:dirname(code:which(?MODULE)), "hash_SUITE_data"),
     %% ExpResFile = filename:join(DataDir, "phash2_bin_expected_results.txt"),
     %% {ok, [ExpRes]} = file:consult(ExpResFile),
-    %% %% ok = file:write_file(ExpResFile, io_lib:format("~w.~n", [Results])),    
+    %% %% ok = file:write_file(ExpResFile, io_lib:format("~w.~n", [Results])),
     %% Results = ExpRes,
     110469206 = erlang:phash2(Results).
 
@@ -594,13 +594,13 @@ test_phash2_4GB_plus_bin_helper1(Bin4GB, ExtraBytes, ExtraBits) ->
 
 test_phash2_4GB_plus_bin_helper2(Bin4GB, TransformerFun, ExtraBytes, ExtraBits) ->
     ExtraBitstring = << ExtraBytes/binary, ExtraBits/bitstring >>,
-    LargerBitstring = << ExtraBytes/binary, 
+    LargerBitstring = << ExtraBytes/binary,
                          ExtraBits/bitstring,
                          Bin4GB/bitstring >>,
     LargerTransformedBitstring = TransformerFun(LargerBitstring),
     true = (size(ExtraBitstring) < 4294967296),
     ExtraBitstringHash = erlang:phash2(ExtraBitstring),
-    true = (size(LargerTransformedBitstring) >= 4294967296),            
+    true = (size(LargerTransformedBitstring) >= 4294967296),
     ExtraBitstringHash = erlang:phash2(LargerTransformedBitstring),
     erts_debug:set_internal_state(force_gc, self()),
     erts_debug:set_internal_state(reds_left, 3),
@@ -611,7 +611,7 @@ run_when_enough_resources(Fun) ->
         {Mem, 8} when is_integer(Mem) andalso Mem >= 31 ->
             Fun();
         {Mem, WordSize} ->
-            {skipped, 
+            {skipped,
              io_lib:format("Not enough resources (System Memory >= ~p, Word Size = ~p)",
                            [Mem, WordSize])}
     end.
@@ -934,36 +934,36 @@ nr_of_iters(BenchmarkNumberOfIterations, Config) ->
         true -> 1;
         false -> BenchmarkNumberOfIterations
     end.
-                     
+
 
 test_phash2_large_map(Config) when is_list(Config) ->
     {Size, ExpectedHash} =
-        case total_memory() of
-            Mem when is_integer(Mem) andalso Mem > 2 ->
+        case {total_memory(), erlang:system_info(wordsize)} of
+            {Mem, 8} when is_integer(Mem) andalso Mem > 2 ->
                 {1000000, 121857429};
             _ ->
                 {1000, 66609305}
         end,
-    run_phash2_test_and_benchmark(nr_of_iters(45, Config), 
+    run_phash2_test_and_benchmark(nr_of_iters(45, Config),
                                   get_map(Size),
                                   ExpectedHash).
 
 test_phash2_shallow_long_list(Config) when is_list(Config) ->
     {Size, ExpectedHash} =
-        case total_memory() of
-            Mem when is_integer(Mem) andalso Mem > 2 ->
+        case {total_memory(), erlang:system_info(wordsize)} of
+            {Mem, 8} when is_integer(Mem) andalso Mem > 2 ->
                 {1000000, 78700388};
             _ ->
                 {1000, 54749638}
         end,
-    run_phash2_test_and_benchmark(nr_of_iters(1, Config), 
+    run_phash2_test_and_benchmark(nr_of_iters(1, Config),
                                   lists:duplicate(Size, get_complex_tuple()),
                                   ExpectedHash).
 
 test_phash2_deep_list(Config) when is_list(Config) ->
     {Size, ExpectedHash} =
-        case total_memory() of
-            Mem when is_integer(Mem) andalso Mem > 2 ->
+        case {total_memory(), erlang:system_info(wordsize)} of
+            {Mem, 8} when is_integer(Mem) andalso Mem > 2 ->
                 {500000, 17986444};
             _ ->
                 {1000, 81794308}
@@ -974,8 +974,8 @@ test_phash2_deep_list(Config) when is_list(Config) ->
 
 test_phash2_deep_tuple(Config) when is_list(Config) ->
     {Size, ExpectedHash} =
-        case total_memory() of
-            Mem when is_integer(Mem) andalso Mem > 2 ->
+        case {total_memory(), erlang:system_info(wordsize)} of
+            {Mem, 8} when is_integer(Mem) andalso Mem > 2 ->
                 {500000, 116594715};
             _ ->
                 {500, 109057352}
@@ -1021,8 +1021,8 @@ test_phash2_with_small_unaligned_sub_binary(Config) when is_list(Config) ->
 
 test_phash2_with_large_bin(Config) when is_list(Config) ->
     {Size, ExpectedHash} =
-        case total_memory() of
-            Mem when is_integer(Mem) andalso Mem > 2 ->
+        case {total_memory(), erlang:system_info(wordsize)} of
+            {Mem, 8} when is_integer(Mem) andalso Mem > 2 ->
                 {10000000, 48249379};
             _ ->
                 {1042, 14679520}
@@ -1033,8 +1033,8 @@ test_phash2_with_large_bin(Config) when is_list(Config) ->
 
 test_phash2_with_large_unaligned_sub_binary(Config) when is_list(Config) ->
     {Size, ExpectedHash} =
-        case total_memory() of
-            Mem when is_integer(Mem) andalso Mem > 2 ->
+        case {total_memory(), erlang:system_info(wordsize)} of
+            {Mem, 8} when is_integer(Mem) andalso Mem > 2 ->
                 {10000001, 122836437};
             _ ->
                 {10042, 127144287}
@@ -1045,8 +1045,8 @@ test_phash2_with_large_unaligned_sub_binary(Config) when is_list(Config) ->
 
 test_phash2_with_super_large_unaligned_sub_binary(Config) when is_list(Config) ->
     {Size, ExpectedHash} =
-        case total_memory() of
-            Mem when is_integer(Mem) andalso Mem > 2 ->
+        case {total_memory(), erlang:system_info(wordsize)} of
+            {Mem, 8} when is_integer(Mem) andalso Mem > 2 ->
                 {20000001, 112086727};
             _ ->
                 {20042, 91996619}
@@ -1078,7 +1078,7 @@ run_phash2_test_and_benchmark(Iterations, Term, ExpectedHash) ->
         fun() ->
                 Hash = erlang:phash2(Term),
                 case ExpectedHash =:= Hash of
-                    false -> 
+                    false ->
                         Parent ! {got_bad_hash, Hash},
                         ExpectedHash = Hash;
                     _ -> ok
@@ -1102,14 +1102,14 @@ run_phash2_test_and_benchmark(Iterations, Term, ExpectedHash) ->
             IterationsPerSecond = Iterations / TimeInS,
             notify(#event{ name = benchmark_data, data = [{value, IterationsPerSecond}]}),
             {comment, io_lib:format("Iterations per second: ~p, Iterations ~p, Benchmark time: ~p seconds)",
-                                    [IterationsPerSecond, Iterations, Time/1000000])} 
+                                    [IterationsPerSecond, Iterations, Time/1000000])}
     end.
 
 get_complex_tuple() ->
     BPort = <<131,102,100,0,13,110,111,110,111,100,101,64,110,111,104,
               111,115,116,0,0,0,1,0>>,
     Port = binary_to_term(BPort),
-    
+
     BXPort = <<131,102,100,0,11,97,112,97,64,108,101,103,111,108,97,115,
                0,0,0,24,3>>,
     XPort = binary_to_term(BXPort),
@@ -1163,7 +1163,7 @@ get_complex_tuple() ->
            130,103,100,0,13,110,111,110,111,100,101,64,110,111,104,111,
            115,116,0,0,0,112,0,0,0,0,0,100,0,3,97,98,99,100,0,3,97,98,
            100,104,2,100,0,3,97,98,99,100,0,3,97,98,100>>,
-    F5 = binary_to_term(B5), 
+    F5 = binary_to_term(B5),
     {{1,{2}},an_atom, 1, 3434.923942394,<<"this is a binary">>,
      make_unaligned_sub_binary(<<"this is also a binary">>),c,d,e,f,g,h,i,j,k,l,[f],
      999999999999999999666666662123123123123324234999999999999999, 234234234,
