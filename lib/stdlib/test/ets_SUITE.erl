@@ -43,7 +43,7 @@
 	 t_delete_all_objects/1, t_insert_list/1, t_test_ms/1,
 	 t_select_delete/1,t_select_replace/1,t_select_replace_next_bug/1,t_ets_dets/1]).
 -export([test_table_size_concurrency/1,test_table_memory_concurrency/1,
-         test_delete_table_while_size_snapshot/1, test_delete_table_while_size_snapshot_helper/0]).
+         test_delete_table_while_size_snapshot/1, test_delete_table_while_size_snapshot_helper/1]).
 
 -export([ordered/1, ordered_match/1, interface_equality/1,
 	 fixtable_next/1, fixtable_insert/1, rename/1, rename_unnamed/1, evil_rename/1,
@@ -158,7 +158,7 @@ all() ->
      whereis_table,
      delete_unfix_race,
      test_throughput_benchmark,
-     {group, benchmark},
+     %{group, benchmark},
      test_table_size_concurrency,
      test_table_memory_concurrency,
      test_delete_table_while_size_snapshot].
@@ -4448,7 +4448,10 @@ size_loop(_T, 0, _, _) ->
 size_loop(T, I, PrevSize, WhatToTest) ->
     Size = ets:info(T, WhatToTest),
     case Size < PrevSize of
-        true -> ct:fail("Bad ets:info/2");
+        true ->
+            io:format("Bad ets:info/2 (got ~p expected >=~p)",
+                      [Size, PrevSize]),
+            ct:fail("Bad ets:info/2)");
         _ -> ok
     end,
     size_loop(T, I -1, Size, WhatToTest).
@@ -4460,13 +4463,17 @@ add_loop(T, I) ->
     add_loop(T, I -1).
 
 
-test_table_counter_concurrency(WhatToTest) ->
+test_table_counter_concurrency(WhatToTest, TableOptions) ->
     IntStatePrevOn =
         erts_debug:set_internal_state(available_internal_state, true),
     ItemsToAdd = 1000000,
     SizeLoopSize = 1000,
-    T = ets:new(k, [public, ordered_set, {write_concurrency, true}]),
-    erts_debug:set_internal_state(ets_debug_random_split_join, {T, false}),
+    T = ets:new(k, TableOptions),
+    case lists:member(ordered_set, TableOptions) of
+        true ->
+            erts_debug:set_internal_state(ets_debug_random_split_join, {T, false});
+        false -> ok
+    end,
     0 = ets:info(T, size),
     P = self(),
     SpawnedSizeProcs =
@@ -4494,10 +4501,14 @@ test_table_counter_concurrency(WhatToTest) ->
     ok.
 
 test_table_size_concurrency(Config) when is_list(Config) ->
-    test_table_counter_concurrency(size).
+    BaseOptions = [public, {write_concurrency, true}],
+    test_table_counter_concurrency(size, [set | BaseOptions]),
+    test_table_counter_concurrency(size, [ordered_set | BaseOptions]).
 
 test_table_memory_concurrency(Config) when is_list(Config) ->
-    test_table_counter_concurrency(memory).
+    BaseOptions = [public, {write_concurrency, true}],
+    test_table_counter_concurrency(memory, [set | BaseOptions]),
+    test_table_counter_concurrency(memory, [ordered_set | BaseOptions]).
 
 %% Tests that calling the ets:delete operation on a table T with
 %% decentralized counters works while ets:info(T, size) operations are
@@ -4507,15 +4518,19 @@ test_delete_table_while_size_snapshot(Config) when is_list(Config) ->
     %% depend on that pids are ordered in creation order which is no
     %% longer the case when many processes have been started before
     Node = start_slave(),
-    ok = rpc:call(Node, ?MODULE, test_delete_table_while_size_snapshot_helper, []),
+    [ok = rpc:call(Node,
+                   ?MODULE,
+                   test_delete_table_while_size_snapshot_helper,
+                   [TableType])
+     || TableType <- [set, ordered_set]],
     test_server:stop_node(Node),
     ok.
 
-test_delete_table_while_size_snapshot_helper()->
+test_delete_table_while_size_snapshot_helper(TableType) ->
     TopParent = self(),
     repeat_par(
       fun() ->
-              Table = ets:new(t, [public, ordered_set,
+              Table = ets:new(t, [public, TableType,
                                   {write_concurrency, true}]),
               Parent = self(),
               NrOfSizeProcs = 100,
@@ -4523,7 +4538,7 @@ test_delete_table_while_size_snapshot_helper()->
                        || _ <- lists:seq(1, NrOfSizeProcs)],
               timer:sleep(1),
               ets:delete(Table),
-              [receive 
+              [receive
                    table_gone ->  ok;
                    Problem -> TopParent ! Problem
                end || _ <- Pids]
@@ -7296,6 +7311,7 @@ my_tab_to_list(Ts,Key, Acc) ->
 
 wait_for_memory_deallocations() ->
     try
+	erts_debug:set_internal_state(wait, thread_progress),
 	erts_debug:set_internal_state(wait, deallocations)
     catch
 	error:undef ->
@@ -7307,20 +7323,28 @@ etsmem() ->
     % The following is done twice to avoid an inconsistent memory
     % "snapshot" (see verify_etsmem/2).
     lists:foldl(
-      fun(_,_) ->
+      fun(AttemptNr, PrevEtsMem) ->
               wait_for_memory_deallocations(),
-
-              AllTabs = lists:map(fun(T) -> {T,ets:info(T,name),ets:info(T,size),
-                                             ets:info(T,memory),ets:info(T,type)}
-                                  end, ets:all()),
-
+              AllTabs = lists:sort(
+                          lists:map(fun(T) -> {T,ets:info(T,name),ets:info(T,size),
+                                               ets:info(T,memory),ets:info(T,type),
+                                               ets:info(T,write_concurrency)}
+                                    end, ets:all())),
               EtsAllocSize = erts_debug:alloc_blocks_size(ets_alloc),
               ErlangMemoryEts = try erlang:memory(ets) catch error:notsup -> notsup end,
-
-              Mem = {ErlangMemoryEts, EtsAllocSize},
-              {Mem, AllTabs}
+              FlxCtrMemUsage = erts_debug:get_internal_state(flxctr_memory_usage),
+              Mem = {ErlangMemoryEts, EtsAllocSize, FlxCtrMemUsage},
+              EtsMem = {Mem, AllTabs},
+              case PrevEtsMem of
+                  first -> ok;
+                  _ when PrevEtsMem =:= EtsMem -> ok;
+                  _ ->
+                      io:format("etsmem(): Change in attempt ~p~n~nbefore:~n~p~n~nafter:~n~p~n~n",
+                                [AttemptNr, PrevEtsMem, EtsMem])
+              end,
+              EtsMem
       end,
-      not_used,
+      first,
       lists:seq(1,2)).
 
 verify_etsmem(MI) ->
