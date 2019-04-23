@@ -311,6 +311,7 @@ member(_, _) ->
       Access :: access(),
       Tweaks :: {write_concurrency, boolean()}
               | {read_concurrency, boolean()}
+              | {decentralized_counters, boolean()}
               | compressed,
       Pos :: pos_integer(),
       HeirData :: term().

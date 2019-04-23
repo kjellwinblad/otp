@@ -43,7 +43,8 @@
 	 t_delete_all_objects/1, t_insert_list/1, t_test_ms/1,
 	 t_select_delete/1,t_select_replace/1,t_select_replace_next_bug/1,t_ets_dets/1]).
 -export([test_table_size_concurrency/1,test_table_memory_concurrency/1,
-         test_delete_table_while_size_snapshot/1, test_delete_table_while_size_snapshot_helper/1]).
+         test_delete_table_while_size_snapshot/1, test_delete_table_while_size_snapshot_helper/1,
+         test_disable_decentralized_counters/1]).
 
 -export([ordered/1, ordered_match/1, interface_equality/1,
 	 fixtable_next/1, fixtable_insert/1, rename/1, rename_unnamed/1, evil_rename/1,
@@ -4582,6 +4583,39 @@ repeat_par_help(FunToRepeat, NrOfTimes, OrgNrOfTimes) ->
                   Parent ! done
           end),
     repeat_par_help(FunToRepeat, NrOfTimes-1, OrgNrOfTimes).
+
+test_disable_decentralized_counters(Config) when is_list(Config) ->
+    do_test_disable_decentralized_counters(set),
+    do_test_disable_decentralized_counters(ordered_set),
+    ok.
+
+do_test_disable_decentralized_counters(TableType) ->
+    wait_for_memory_deallocations(),
+    FlxCtrMemUsage = erts_debug:get_internal_state(flxctr_memory_usage),
+    lists:foreach(
+      fun(OptList) ->
+              T1 = ets:new(t1, [public, TableType] ++ OptList),
+              FlxCtrMemUsage = erts_debug:get_internal_state(flxctr_memory_usage),
+              ets:delete(T1)
+      end,
+      [[{write_concurrency, false}],
+       [{write_concurrency, true}, {decentralized_counters, false}]]),
+    lists:foreach(
+      fun(OptList) ->
+              T1 = ets:new(t1, [public,
+                                TableType,
+                                {write_concurrency, true}] ++ OptList),
+              case erts_debug:get_internal_state(flxctr_memory_usage) of
+                  notsup -> ok;
+                  X when X > FlxCtrMemUsage -> ok;
+                  _ -> ct:fail("Decentralized counter not used.")
+              end,
+              ets:delete(T1),
+              wait_for_memory_deallocations(),
+              FlxCtrMemUsage = erts_debug:get_internal_state(flxctr_memory_usage)
+      end,
+      [[], [{decentralized_counters, true}]]),
+    ok.
 
 %% Test various duplicate_bags stuff.
 dups(Config) when is_list(Config) ->
