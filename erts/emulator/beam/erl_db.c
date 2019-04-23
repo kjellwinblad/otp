@@ -1620,6 +1620,7 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
     Sint keypos;
     int is_named, is_compressed;
     int is_fine_locked, frequent_read;
+    int is_decentralized_counters;
     int cret;
     DbTableMethod* meth;
 
@@ -1635,6 +1636,7 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
     is_named = 0;
     is_fine_locked = 0;
     frequent_read = 0;
+    is_decentralized_counters = 1;
     heir = am_none;
     heir_data = (UWord) am_undefined;
     is_compressed = erts_ets_always_compress;
@@ -1660,7 +1662,7 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 		if (tp[1] == am_keypos
 		    && is_small(tp[2]) && (signed_val(tp[2]) > 0)) {
 		    keypos = signed_val(tp[2]);
-		}		
+		}
 		else if (tp[1] == am_write_concurrency) {
 		    if (tp[2] == am_true) {
 			is_fine_locked = 1;
@@ -1674,12 +1676,18 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 		    } else if (tp[2] == am_false) {
 			frequent_read = 0;
 		    } else break;
-		    
 		}
 		else if (tp[1] == am_heir && tp[2] == am_none) {
 		    heir = am_none;
 		    heir_data = am_undefined;
 		}
+                else if (tp[1] == am_decentralized_counters) {
+		    if (tp[2] == am_true) {
+			is_decentralized_counters = 1;
+		    } else if (tp[2] == am_false) {
+			is_decentralized_counters = 0;
+		    } else break;
+                }
 		else break;
 	    }
 	    else if (arityval(tp[0]) == 3 && tp[1] == am_heir
@@ -1737,7 +1745,7 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 
     /* we create table outside any table lock
      * and take the unusal cost of destroy table if it
-     * fails to find a slot 
+     * fails to find a slot
      */
     {
         DbTable init_tb;
@@ -1745,7 +1753,7 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 	tb = (DbTable*) erts_db_alloc(ERTS_ALC_T_DB_TABLE,
 				      &init_tb, sizeof(DbTable));
         erts_flxctr_init(&tb->common.counters,
-                         status & DB_FINE_LOCKED,
+                         (status & DB_FINE_LOCKED) && is_decentralized_counters,
                          2,
                          ERTS_ALC_T_ETS_CTRS);
         erts_flxctr_add(&tb->common.counters,
@@ -1756,7 +1764,7 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 
     tb->common.meth = meth;
     tb->common.the_name = BIF_ARG_1;
-    tb->common.status = status;    
+    tb->common.status = status;
     tb->common.type = status;
     /* Note, 'type' is *read only* from now on... */
     erts_refc_init(&tb->common.fix_count, 0);
@@ -1795,7 +1803,7 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
         table_dec_refc(tb, 0);
 	BIF_ERROR(BIF_P, BADARG);
     }
-    
+
     BIF_P->flags |= F_USING_DB; /* So we can remove tb if p dies */
 
 #ifdef HARDDEBUG
@@ -3286,6 +3294,7 @@ BIF_RETTYPE ets_info_1(BIF_ALIST_1)
                              am_node, am_size, am_name, am_heir, am_owner, am_memory, am_compressed,
                              am_write_concurrency,
                              am_read_concurrency,
+                             am_decentralized_counters,
                              am_id};
     Eterm results[sizeof(fields)/sizeof(Eterm)];
     DbTable* tb;
@@ -4234,7 +4243,7 @@ static Eterm table_info(Process* p, DbTable* tb, Eterm What)
     } else if (What == am_heir) {
 	ret = tb->common.heir;
     } else if (What == am_protection) {
-	if (tb->common.status & DB_PRIVATE) 
+	if (tb->common.status & DB_PRIVATE)
 	    ret = am_private;
 	else if (tb->common.status & DB_PROTECTED)
 	    ret = am_protected;
@@ -4256,6 +4265,8 @@ static Eterm table_info(Process* p, DbTable* tb, Eterm What)
 	ret = tb->common.compress ? am_true : am_false;
     } else if (What == am_id) {
         ret = make_tid(p, tb);
+    } else if (What == am_decentralized_counters) {
+        ret = tb->common.counters.is_decentralized ? am_true : am_false;
     }
 
     /*
