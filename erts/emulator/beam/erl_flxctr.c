@@ -52,9 +52,9 @@ typedef enum {
      ERTS_FLXCTR_DECENTRALIZED_NO_SLOTS) +              \
      ERTS_CACHE_LINE_SIZE)
 
-#ifdef DEBUG
+//#ifdef DEBUG
 #define FLXCTR_MEM_DEBUG 1
-#endif
+//#endif
 
 #ifdef FLXCTR_MEM_DEBUG
 static erts_atomic_t debug_mem_usage;
@@ -166,11 +166,12 @@ static void suspend_until_thr_prg(Process* p)
 
 size_t erts_flxctr_nr_of_allocated_bytes(ErtsFlxCtr* c)
 {
-    if (c->is_decentralized) {
+    return 0;
+    /*    if (c->is_decentralized) {
         return ERTS_FLXCTR_DECENTRALIZED_COUNTER_ARRAY_SIZE;
     } else {
         return 0;
-    }
+        }*/
 }
 
 static ErtsFlxCtrDecentralizedCtrArray*

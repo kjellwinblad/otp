@@ -683,18 +683,20 @@ t_repair_continuation_do(Opts) ->
 %% Test correct default vaules of a new ets table.
 default(Config) when is_list(Config) ->
     %% Default should be set,protected
-    EtsMem = etsmem(),
-    Def = ets_new(def,[]),
-    set = ets:info(Def,type),
-    protected = ets:info(Def,protection),
-    Compressed = erlang:system_info(ets_always_compress),
-    Compressed = ets:info(Def,compressed),
-    Self = self(),
-    Self = ets:info(Def,owner),
-    none = ets:info(Def, heir),
-    false = ets:info(Def,named_table),
-    ets:delete(Def),
-    verify_etsmem(EtsMem).
+    repeat(fun() ->
+                   EtsMem = etsmem(),
+                   Def = ets_new(def,[]),
+                   set = ets:info(Def,type),
+                   protected = ets:info(Def,protection),
+                   Compressed = erlang:system_info(ets_always_compress),
+                   Compressed = ets:info(Def,compressed),
+                   Self = self(),
+                   Self = ets:info(Def,owner),
+                   none = ets:info(Def, heir),
+                   false = ets:info(Def,named_table),
+                   ets:delete(Def),
+                   verify_etsmem(EtsMem)
+           end, 1).
 
 %% Test that select fails even if nothing can match.
 select_fail(Config) when is_list(Config) ->
@@ -7360,22 +7362,25 @@ etsmem() ->
       fun(AttemptNr, PrevEtsMem) ->
               wait_for_memory_deallocations(),
               AllTabs = lists:sort(
-                          lists:map(fun(T) -> {T,ets:info(T,name),ets:info(T,size),
-                                               ets:info(T,memory),ets:info(T,type),
-                                               ets:info(T,write_concurrency)}
-                                    end, ets:all())),
+                          [begin
+                               {T,ets:info(T,name),ets:info(T,size),
+                                ets:info(T,memory),ets:info(T,type)}
+                           end || T <- ets:all(), ets:info(T, name) =/= code]),
+              wait_for_memory_deallocations(),
               EtsAllocSize = erts_debug:alloc_blocks_size(ets_alloc),
               ErlangMemoryEts = try erlang:memory(ets) catch error:notsup -> notsup end,
               FlxCtrMemUsage = erts_debug:get_internal_state(flxctr_memory_usage),
               Mem = {ErlangMemoryEts, EtsAllocSize, FlxCtrMemUsage},
               EtsMem = {Mem, AllTabs},
-              case PrevEtsMem of
-                  first -> ok;
-                  _ when PrevEtsMem =:= EtsMem -> ok;
-                  _ ->
-                      io:format("etsmem(): Change in attempt ~p~n~nbefore:~n~p~n~nafter:~n~p~n~n",
-                                [AttemptNr, PrevEtsMem, EtsMem])
-              end,
+              %% case PrevEtsMem of
+              %%     first -> ok;
+              %%     _ when element(1,PrevEtsMem) =:= Mem -> ok;
+              %%     _ ->
+              %%         io:format("K ~p ~n", [K]),
+              %%         io:format("~p ~n", [instrument:allocations()]),
+              %%         io:format("etsmem(): Change in attempt ~p~n~nbefore:~n~p~n~nafter:~n~p~n~n",
+              %%                   [AttemptNr, PrevEtsMem, EtsMem])
+              %% end,
               EtsMem
       end,
       first,
@@ -7404,6 +7409,7 @@ verify_etsmem({MemInfo,AllTabs}, Try) ->
 	    io:format("#Actual:   ~p", [MemInfo2]),
 	    io:format("#Changed tables before: ~p\n",[AllTabs -- AllTabs2]),
 	    io:format("#Changed tables after: ~p\n", [AllTabs2 -- AllTabs]),
+            io:format("~p ~n", [instrument:allocations()]),
             case Try < 2 of
                 true ->
                     io:format("\n#This discrepancy could be caused by an "
