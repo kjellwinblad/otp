@@ -178,16 +178,17 @@ static ErtsFlxCtrDecentralizedCtrArray*
 create_decentralized_ctr_array(ErtsAlcType_t alloc_type, Uint nr_of_counters) {
     /* Allocate an ErtsFlxCtrDecentralizedCtrArray and make sure that
        the array field is located at the start of a cache line */
-    char* bytes =
-        erts_alloc(alloc_type,
-                   ERTS_FLXCTR_DECENTRALIZED_COUNTER_ARRAY_SIZE);
-    void* block_start = bytes;
+    char* bytes;
+    void* block_start;
     int bytes_to_next_cacheline_border;
     ErtsFlxCtrDecentralizedCtrArray* array;
     int i, sched;
 #ifdef FLXCTR_MEM_DEBUG
     erts_atomic_add_mb(&debug_mem_usage, ERTS_FLXCTR_DECENTRALIZED_COUNTER_ARRAY_SIZE);
 #endif
+    bytes = erts_alloc(alloc_type,
+                       ERTS_FLXCTR_DECENTRALIZED_COUNTER_ARRAY_SIZE);
+    block_start = bytes;
     bytes = &bytes[offsetof(ErtsFlxCtrDecentralizedCtrArray, array)];
     bytes_to_next_cacheline_border =
         ERTS_CACHE_LINE_SIZE - (((Uint)bytes) % ERTS_CACHE_LINE_SIZE);
@@ -211,9 +212,8 @@ void erts_flxctr_setup(int decentralized_counter_groups)
 {
     reader_groups_array_size = decentralized_counter_groups+1;
 #ifdef FLXCTR_MEM_DEBUG
-    erts_atomic_init_mb(&debug_mem_usage, 0);    
+    erts_atomic_init_mb(&debug_mem_usage, 0);
 #endif
-       
 }
 
 void erts_flxctr_init(ErtsFlxCtr* c,

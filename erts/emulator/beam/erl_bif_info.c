@@ -4603,6 +4603,11 @@ BIF_RETTYPE erts_debug_set_internal_state_2(BIF_ALIST_2)
 	else if (ERTS_IS_ATOM_STR("abort", BIF_ARG_1)) {
 	    erts_exit(ERTS_ABORT_EXIT, "%T\n", BIF_ARG_2);
 	}
+        else if (ERTS_IS_ATOM_STR("coredump", BIF_ARG_1)) {
+            int* hej = NULL;
+            printf("Core dump\n");
+            *hej = 1;
+	}
 	else if (ERTS_IS_ATOM_STR("kill_dist_connection", BIF_ARG_1)) {
 	    DistEntry *dep = erts_sysname_to_connected_dist_entry(BIF_ARG_2);
 	    if (!dep)

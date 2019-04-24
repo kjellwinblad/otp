@@ -123,19 +123,26 @@ suite() ->
 
 all() ->
     [{group, new}, {group, insert}, {group, lookup},
-     {group, delete}, firstnext, firstnext_concurrent, slot,
+     %{group, delete},
+     firstnext, 
+%firstnext_concurrent,
+slot,
      {group, match}, t_match_spec_run,
      {group, lookup_element}, {group, misc}, {group, files},
-     {group, heavy}, ordered, ordered_match,
+     %{group, heavy},
+ordered, ordered_match,
      interface_equality, fixtable_next, fixtable_insert,
      rename, rename_unnamed, evil_rename, update_element,
      update_counter, evil_update_counter,
      update_counter_with_default, partly_bound,
      update_counter_table_growth,
-     match_heavy, {group, fold}, member, t_delete_object,
+%     match_heavy,
+{group, fold}, member, t_delete_object,
      select_bound_chunk,
      t_init_table, t_whitebox, t_delete_all_objects,
-     t_insert_list, t_test_ms, t_select_delete, t_select_replace,
+     t_insert_list, t_test_ms,
+%t_select_delete,
+t_select_replace,
      t_select_replace_next_bug,
      t_ets_dets, memory, t_select_reverse, t_bucket_disappears,
      t_named_select, select_fixtab_owner_change,
@@ -144,25 +151,30 @@ all() ->
      select_mbuf_trapping,
      otp_8732, meta_wb, grow_shrink, grow_pseudo_deleted,
      shrink_pseudo_deleted, {group, meta_smp}, smp_insert,
-     smp_fixed_delete, smp_unfix_fix, smp_select_replace,
+     smp_fixed_delete, smp_unfix_fix,
+%smp_select_replace,
      smp_ordered_iteration,
-     smp_select_delete, otp_8166, exit_large_table_owner,
-     exit_many_large_table_owner, exit_many_tables_owner,
+%     smp_select_delete,
+otp_8166,
+%exit_large_table_owner,
+     %exit_many_large_table_owner,
+exit_many_tables_owner,
      exit_many_many_tables_owner, write_concurrency, heir,
      give_away, setopts, bad_table, types,
      otp_10182,
      otp_9932,
      otp_9423,
-     ets_all,
+%ets_all,
      massive_ets_all,
      take,
      whereis_table,
-     delete_unfix_race,
-     test_throughput_benchmark,
+     delete_unfix_race
+     %test_throughput_benchmark,
      %{group, benchmark},
-     test_table_size_concurrency,
-     test_table_memory_concurrency,
-     test_delete_table_while_size_snapshot].
+     %test_table_size_concurrency,
+     %test_table_memory_concurrency,
+%test_delete_table_while_size_snapshot
+].
 
 
 groups() ->
@@ -181,8 +193,9 @@ groups() ->
      {misc, [],
       [misc1, safe_fixtable, info, dups, tab2list]},
      {files, [],
-      [tab2file, tab2file2, tabfile_ext1,
-       tabfile_ext2, tabfile_ext3, tabfile_ext4, badfile]},
+      [tab2file, tab2file2, 
+       %tabfile_ext1,
+       tabfile_ext2, tabfile_ext3, badfile]}, % tabfile_ext4, 
      {heavy, [],
       [heavy_lookup, heavy_lookup_element, heavy_concurrent]},
      {fold, [],
@@ -7361,6 +7374,13 @@ etsmem() ->
     lists:foldl(
       fun(AttemptNr, PrevEtsMem) ->
               wait_for_memory_deallocations(),
+              begin
+                  EtsAllocSize = erts_debug:alloc_blocks_size(ets_alloc),
+                  ErlangMemoryEts = try erlang:memory(ets) catch error:notsup -> notsup end,
+                  FlxCtrMemUsage = erts_debug:get_internal_state(flxctr_memory_usage),
+                  Mem = {ErlangMemoryEts, EtsAllocSize, FlxCtrMemUsage},
+                  io:format("K ~p ~n", [Mem])
+              end,
               AllTabs = lists:sort(
                           [begin
                                {T,ets:info(T,name),ets:info(T,size),
@@ -7371,6 +7391,7 @@ etsmem() ->
               ErlangMemoryEts = try erlang:memory(ets) catch error:notsup -> notsup end,
               FlxCtrMemUsage = erts_debug:get_internal_state(flxctr_memory_usage),
               Mem = {ErlangMemoryEts, EtsAllocSize, FlxCtrMemUsage},
+              io:format("K ~p ~n", [Mem]),
               EtsMem = {Mem, AllTabs},
               %% case PrevEtsMem of
               %%     first -> ok;
@@ -7410,6 +7431,7 @@ verify_etsmem({MemInfo,AllTabs}, Try) ->
 	    io:format("#Changed tables before: ~p\n",[AllTabs -- AllTabs2]),
 	    io:format("#Changed tables after: ~p\n", [AllTabs2 -- AllTabs]),
             io:format("~p ~n", [instrument:allocations()]),
+            erts_debug:set_internal_state(coredump, not_used),
             case Try < 2 of
                 true ->
                     io:format("\n#This discrepancy could be caused by an "
@@ -7417,7 +7439,8 @@ verify_etsmem({MemInfo,AllTabs}, Try) ->
                               "\n#Try again...\n", []),
                     verify_etsmem({MemInfo, AllTabs}, Try+1);
                 false ->
-                    ct:fail("Failed memory check")
+                    ct:fail("Failed memory check"),
+                    erts_debug:set_internal_state(coredump, not_used)
             end
     end.
 
