@@ -4603,6 +4603,12 @@ BIF_RETTYPE erts_debug_set_internal_state_2(BIF_ALIST_2)
 	else if (ERTS_IS_ATOM_STR("abort", BIF_ARG_1)) {
 	    erts_exit(ERTS_ABORT_EXIT, "%T\n", BIF_ARG_2);
 	}
+        else if (ERTS_IS_ATOM_STR("mymark", BIF_ARG_1)) {
+            long s;
+            term_to_Sint(BIF_ARG_2, &s);
+            printf("My Mark %ld \n", s);
+            BIF_RET(am_true);
+	}
         else if (ERTS_IS_ATOM_STR("coredump", BIF_ARG_1)) {
             int* hej = NULL;
             printf("Core dump\n");

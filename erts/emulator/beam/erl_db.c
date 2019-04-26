@@ -47,6 +47,8 @@
 
 erts_atomic_t erts_ets_misc_mem_size;
 
+#define ETS_CTRS_ALLOC_TYPE ERTS_ALC_T_ETS_CTRS
+/*ERTS_ALC_T_DB_TABLE*/
 /*
 ** Utility macros
 */
@@ -417,7 +419,7 @@ free_dbtable(void *vtb)
     if (tb->common.btid)
         erts_bin_release(tb->common.btid);
 
-    erts_flxctr_destroy(&tb->common.counters, ERTS_ALC_T_DB_TABLE);
+    erts_flxctr_destroy(&tb->common.counters, ETS_CTRS_ALLOC_TYPE);
     erts_free(ERTS_ALC_T_DB_TABLE, tb);
 }
 
@@ -1749,13 +1751,13 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
      */
     {
         DbTable init_tb;
-        erts_flxctr_init(&init_tb.common.counters, 0, 2, ERTS_ALC_T_DB_TABLE);
+        erts_flxctr_init(&init_tb.common.counters, 0, 2, ETS_CTRS_ALLOC_TYPE);
 	tb = (DbTable*) erts_db_alloc(ERTS_ALC_T_DB_TABLE,
 				      &init_tb, sizeof(DbTable));
         erts_flxctr_init(&tb->common.counters,
                          (status & DB_FINE_LOCKED) && is_decentralized_counters,
                          2,
-                         ERTS_ALC_T_DB_TABLE);
+                         ETS_CTRS_ALLOC_TYPE);
         erts_flxctr_add(&tb->common.counters,
                         ERTS_DB_TABLE_MEM_COUNTER_ID,
                         DB_GET_APPROX_MEM_CONSUMED(&init_tb) +
@@ -3357,7 +3359,7 @@ BIF_RETTYPE ets_info_1(BIF_ALIST_1)
 
     if (!is_ctrs_read_result_set) {
         ErtsFlxCtrSnapshotResult res =
-            erts_flxctr_snapshot(&tb->common.counters, ERTS_ALC_T_DB_TABLE, BIF_P);
+            erts_flxctr_snapshot(&tb->common.counters, ETS_CTRS_ALLOC_TYPE, BIF_P);
         if (ERTS_FLXCTR_GET_RESULT_AFTER_TRAP == res.type) {
             Eterm tuple;
             db_unlock(tb, LCK_READ);
@@ -3430,7 +3432,7 @@ BIF_RETTYPE ets_info_2(BIF_ALIST_2)
     }
     if (BIF_ARG_2 == am_size || BIF_ARG_2 == am_memory) {
         ErtsFlxCtrSnapshotResult res =
-            erts_flxctr_snapshot(&tb->common.counters, ERTS_ALC_T_DB_TABLE, BIF_P);
+            erts_flxctr_snapshot(&tb->common.counters, ETS_CTRS_ALLOC_TYPE, BIF_P);
         if (ERTS_FLXCTR_GET_RESULT_AFTER_TRAP == res.type) {
             db_unlock(tb, LCK_READ);
             BIF_TRAP2(bif_export[BIF_ets_info_2], BIF_P, res.trap_resume_state, BIF_ARG_2);

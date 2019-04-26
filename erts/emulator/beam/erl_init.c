@@ -136,6 +136,8 @@ Eterm erts_init_process_id = ERTS_INVALID_PID;
  * inherit previous values.
  */
 
+erts_mtx_t my_global_lock;
+
 extern void erl_crash_dump_v(char *, int, char *, va_list);
 #ifdef __WIN32__
 extern void ConNormalExit(void);
@@ -373,6 +375,7 @@ erl_init(int ncpu,
     packet_parser_init();
     erl_nif_init();
     erts_msacc_init();
+    erts_mtx_init(&my_global_lock, "my_lock", NIL, 0);
 }
 
 static Eterm

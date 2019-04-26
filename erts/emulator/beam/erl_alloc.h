@@ -73,6 +73,8 @@ typedef enum {
   (ASSERT(ERTS_ALC_IS_FIX_TYPE(T)), \
    ERTS_ALC_T2N((T)) - ERTS_ALC_N_MIN_A_FIXED_SIZE)
 
+extern erts_mtx_t my_global_lock;
+
 void erts_sys_alloc_init(void);
 void *erts_sys_alloc(ErtsAlcType_t, void *, Uint);
 void *erts_sys_realloc(ErtsAlcType_t, void *, void *, Uint);
@@ -242,11 +244,12 @@ void *erts_alloc_permanent_cache_aligned(ErtsAlcType_t type, Uint size);
 #endif
 
 #if ERTS_ALC_DO_INLINE || defined(ERTS_ALC_INTERNAL__)
-
+typedef union {char c[ERTS_ALLOC_ALIGN_BYTES]; long l; double d;} UnitA_t;
 ERTS_ALC_INLINE
 void *erts_alloc(ErtsAlcType_t type, Uint size)
 {
     void *res;
+    erts_mtx_lock(&my_global_lock);
     ERTS_MSACC_PUSH_AND_SET_STATE_X(ERTS_MSACC_STATE_ALLOC);
     res = (*erts_allctrs[ERTS_ALC_T2A(type)].alloc)(
             type,
@@ -255,6 +258,75 @@ void *erts_alloc(ErtsAlcType_t type, Uint size)
     if (!res)
 	erts_alloc_n_enomem(ERTS_ALC_T2N(type), size);
     ERTS_MSACC_POP_STATE_X();
+    if(type == ERTS_ALC_T_ETS_CTRS) {
+        #undef  WORD_MASK
+#define INV_WORD_MASK	((UWord) (sizeof(UWord) - 1))
+#define WORD_MASK	(~INV_WORD_MASK)
+#define WORD_FLOOR(X)	((X) & WORD_MASK)
+#define WORD_CEILING(X)	WORD_FLOOR((X) + INV_WORD_MASK)
+
+#undef  UNIT_MASK
+#define INV_UNIT_MASK	((UWord) (sizeof(UnitA_t) - 1))
+#define UNIT_MASK	(~INV_UNIT_MASK)
+#define UNIT_FLOOR(X)	((X) & UNIT_MASK)
+#define UNIT_CEILING(X)	UNIT_FLOOR((X) + INV_UNIT_MASK)
+
+/* We store flags in the bits that no one will ever use. Generally these are
+ * the bits below the alignment size, but for blocks we also steal the highest
+ * bit since the header's a size and no one can expect to be able to allocate
+ * objects that large. */
+#define HIGHEST_WORD_BIT        (((UWord) 1) << (sizeof(UWord) * CHAR_BIT - 1))
+
+#define BLK_FLG_MASK            (INV_UNIT_MASK | HIGHEST_WORD_BIT)
+#define SBC_BLK_SZ_MASK         (~BLK_FLG_MASK)
+#define MBC_FBLK_SZ_MASK        (~BLK_FLG_MASK)
+
+#define CRR_FLG_MASK        INV_UNIT_MASK
+#define CRR_SZ_MASK         UNIT_MASK
+
+#if ERTS_HAVE_MSEG_SUPER_ALIGNED \
+    || (!HAVE_ERTS_MSEG && ERTS_HAVE_ERTS_SYS_ALIGNED_ALLOC)
+#  ifdef MSEG_ALIGN_BITS
+#    define ERTS_SUPER_ALIGN_BITS MSEG_ALIGN_BITS
+#  else
+#    define ERTS_SUPER_ALIGN_BITS 18
+#  endif
+#  ifdef ARCH_64 
+#    define MBC_ABLK_OFFSET_BITS   23
+#  else
+#    define MBC_ABLK_OFFSET_BITS   8
+     /* Affects hard limits for sbct and lmbcs documented in erts_alloc.xml */
+#  endif
+#  define ERTS_SACRR_UNIT_SHIFT		ERTS_SUPER_ALIGN_BITS
+#  define ERTS_SACRR_UNIT_SZ		(1 << ERTS_SACRR_UNIT_SHIFT)
+#  define ERTS_SACRR_UNIT_MASK		((~(UWord)0) << ERTS_SACRR_UNIT_SHIFT)
+#  define ERTS_SACRR_UNIT_FLOOR(X)	((X) & ERTS_SACRR_UNIT_MASK)
+#  define ERTS_SACRR_UNIT_CEILING(X)	ERTS_SACRR_UNIT_FLOOR((X) + ~ERTS_SACRR_UNIT_MASK)
+#  define ERTS_SA_MB_CARRIERS 1
+#else
+#  define ERTS_SA_MB_CARRIERS 0
+#  define MBC_ABLK_OFFSET_BITS   0 /* no carrier offset in block header */
+#endif
+#if ERTS_HAVE_MSEG_SUPER_ALIGNED && !ERTS_HAVE_ERTS_SYS_ALIGNED_ALLOC
+#  define ERTS_SUPER_ALIGNED_MSEG_ONLY 1
+#else
+#  define ERTS_SUPER_ALIGNED_MSEG_ONLY 0
+#endif
+
+#if MBC_ABLK_OFFSET_BITS
+#  define MBC_ABLK_OFFSET_SHIFT  (sizeof(UWord)*8 - MBC_ABLK_OFFSET_BITS)
+#  define MBC_ABLK_OFFSET_MASK   ((~((UWord)0) << MBC_ABLK_OFFSET_SHIFT) & ~BLK_FLG_MASK)
+#  define MBC_ABLK_SZ_MASK	(~MBC_ABLK_OFFSET_MASK & ~BLK_FLG_MASK)
+#else
+#  define MBC_ABLK_SZ_MASK	(~BLK_FLG_MASK)
+#endif
+
+#define MBC_ABLK_SZ(B) (ASSERT(!is_sbc_blk(B)), (B)->bhdr & MBC_ABLK_SZ_MASK)
+#define MBC_FBLK_SZ(B) (ASSERT(!is_sbc_blk(B)), (B)->bhdr & MBC_FBLK_SZ_MASK)
+#define SBC_BLK_SZ(B) (ASSERT(is_sbc_blk(B)), (B)->bhdr & SBC_BLK_SZ_MASK)
+        printf("A %p %lu %lu %lu ", res, size, SBC_BLK_SZ_MASK & (((UWord*)res)[-1]), MBC_ABLK_SZ_MASK & (((UWord*)res)[-1]));
+    }
+    erts_mtx_unlock(&my_global_lock);
     return res;
 }
 
@@ -262,6 +334,7 @@ ERTS_ALC_INLINE
 void *erts_realloc(ErtsAlcType_t type, void *ptr, Uint size)
 {
     void *res;
+    erts_mtx_lock(&my_global_lock);
     ERTS_MSACC_PUSH_AND_SET_STATE_X(ERTS_MSACC_STATE_ALLOC);
     res = (*erts_allctrs[ERTS_ALC_T2A(type)].realloc)(
 	type,
@@ -271,18 +344,48 @@ void *erts_realloc(ErtsAlcType_t type, void *ptr, Uint size)
     if (!res)
 	erts_realloc_n_enomem(ERTS_ALC_T2N(type), ptr, size);
     ERTS_MSACC_POP_STATE_X();
+    if(type == ERTS_ALC_T_ETS_CTRS) {
+        printf("R %p %lu ", res, size);
+    }
+    erts_mtx_unlock(&my_global_lock);
     return res;
 }
+
+
+/*DB_TABLE
+DB_FIXATION
+DB_FIX_DEL
+DB_TABLES
+DB_NTAB_ENT
+DB_TMP
+DB_MC_STK
+DB_MS_RUN_HEAP
+DB_MS_CMPL_HEAP
+DB_SEG
+DB_STK
+DB_TRANS_TAB
+DB_SEL_LIST
+DB_DMC_ERROR
+DB_DMC_ERR_INFO
+DB_TERM
+DB_PROC_CLEANUP
+ETS_ALL_REQ
+ETS_CTRS*/
 
 ERTS_ALC_INLINE
 void erts_free(ErtsAlcType_t type, void *ptr)
 {
+    erts_mtx_lock(&my_global_lock);
+    if(type == ERTS_ALC_T_ETS_CTRS) {
+        printf("F %p ", ptr);
+    }
     ERTS_MSACC_PUSH_AND_SET_STATE_X(ERTS_MSACC_STATE_ALLOC);
     (*erts_allctrs[ERTS_ALC_T2A(type)].free)(
 	type,
 	erts_allctrs[ERTS_ALC_T2A(type)].extra,
 	ptr);
     ERTS_MSACC_POP_STATE_X();
+    erts_mtx_unlock(&my_global_lock);
 }
 
 

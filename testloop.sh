@@ -1,12 +1,14 @@
 #!/bin/bash
 
+# echo "/home/kjell/src/work/otp_2/core" > /proc/sys/kernel/core_pattern
+
 CORECOUNT=0
 
-for i in `seq 1 100000`;
+for i in `seq 1 10`;
 do
     rm core
     echo SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS starting run $i
-    (cd $TESTSERVER && cerl -rr -debug +Muatags true -eval "erts_debug:df(ets_SUITE), ts:run(stdlib, ets_SUITE,   [batch]), erlang:halt()")
+    (cd $TESTSERVER && cerl  +Muatags true -eval "erts_debug:df(ets_SUITE), ts:run(stdlib, ets_SUITE,   [batch]), erlang:halt()")
     echo KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK run $i ended
     if [ -f core ]; then
         CORECOUNT=$(expr $CORECOUNT + 1)

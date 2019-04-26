@@ -1,3 +1,4 @@
+
 %%
 %% %CopyrightBegin%
 %%
@@ -7361,6 +7362,14 @@ my_tab_to_list(Ts,Key, Acc) ->
 wait_for_memory_deallocations() ->
     try
 	erts_debug:set_internal_state(wait, thread_progress),
+	erts_debug:set_internal_state(wait, deallocations),
+	erts_debug:set_internal_state(wait, thread_progress),
+	erts_debug:set_internal_state(wait, deallocations),
+	erts_debug:set_internal_state(wait, thread_progress),
+	erts_debug:set_internal_state(wait, deallocations),
+	erts_debug:set_internal_state(wait, thread_progress),
+	erts_debug:set_internal_state(wait, deallocations),
+	erts_debug:set_internal_state(wait, thread_progress),
 	erts_debug:set_internal_state(wait, deallocations)
     catch
 	error:undef ->
@@ -7374,25 +7383,35 @@ etsmem() ->
     lists:foldl(
       fun(AttemptNr, PrevEtsMem) ->
               wait_for_memory_deallocations(),
-              begin
-                  EtsAllocSize = erts_debug:alloc_blocks_size(ets_alloc),
-                  ErlangMemoryEts = try erlang:memory(ets) catch error:notsup -> notsup end,
-                  FlxCtrMemUsage = erts_debug:get_internal_state(flxctr_memory_usage),
-                  Mem = {ErlangMemoryEts, EtsAllocSize, FlxCtrMemUsage},
-                  io:format("K ~p ~n", [Mem])
-              end,
+              erts_debug:set_internal_state(mymark, 1),
+              BMem = begin
+                         GEtsAllocSize = erts_debug:alloc_blocks_size(ets_alloc),
+                         GErlangMemoryEts = try erlang:memory(ets) catch error:notsup -> notsup end,
+                         GFlxCtrMemUsage = erts_debug:get_internal_state(flxctr_memory_usage),
+                         GMem = {GErlangMemoryEts, GEtsAllocSize, GFlxCtrMemUsage},
+                         %%io:format("G ~p ~n", [GMem]),
+                         erts_debug:set_internal_state(mymark, GEtsAllocSize),
+                         GMem
+                     end,
+              wait_for_memory_deallocations(),
+              erts_debug:set_internal_state(mymark, 2),
               AllTabs = lists:sort(
                           [begin
                                {T,ets:info(T,name),ets:info(T,size),
                                 ets:info(T,memory),ets:info(T,type)}
                            end || T <- ets:all(), ets:info(T, name) =/= code]),
               wait_for_memory_deallocations(),
+              erts_debug:set_internal_state(mymark, 3),
               EtsAllocSize = erts_debug:alloc_blocks_size(ets_alloc),
               ErlangMemoryEts = try erlang:memory(ets) catch error:notsup -> notsup end,
               FlxCtrMemUsage = erts_debug:get_internal_state(flxctr_memory_usage),
               Mem = {ErlangMemoryEts, EtsAllocSize, FlxCtrMemUsage},
-              io:format("K ~p ~n", [Mem]),
+              %%io:format("K ~p ~n", [Mem]),
               EtsMem = {Mem, AllTabs},
+              case BMem /= Mem of
+                  true ->  erts_debug:set_internal_state(mymark, 4), erts_debug:set_internal_state(mymark, EtsAllocSize), erts_debug:set_internal_state(coredump, not_used);
+                  false -> ok
+              end,
               %% case PrevEtsMem of
               %%     first -> ok;
               %%     _ when element(1,PrevEtsMem) =:= Mem -> ok;
@@ -7422,7 +7441,7 @@ verify_etsmem({MemInfo,AllTabs}, Try) ->
 		{_, 1} ->
                     ok;
                 _ ->
-                    {comment, "Transient memory discrepancy"}
+                    {comment, io_lib:format("Transient memory discrepancy ~p", [Try])}
 	    end;
 
 	{MemInfo2, AllTabs2} ->
@@ -7431,7 +7450,7 @@ verify_etsmem({MemInfo,AllTabs}, Try) ->
 	    io:format("#Changed tables before: ~p\n",[AllTabs -- AllTabs2]),
 	    io:format("#Changed tables after: ~p\n", [AllTabs2 -- AllTabs]),
             io:format("~p ~n", [instrument:allocations()]),
-            erts_debug:set_internal_state(coredump, not_used),
+            %%erts_debug:set_internal_state(coredump, not_used),
             case Try < 2 of
                 true ->
                     io:format("\n#This discrepancy could be caused by an "
@@ -7439,8 +7458,8 @@ verify_etsmem({MemInfo,AllTabs}, Try) ->
                               "\n#Try again...\n", []),
                     verify_etsmem({MemInfo, AllTabs}, Try+1);
                 false ->
-                    ct:fail("Failed memory check"),
-                    erts_debug:set_internal_state(coredump, not_used)
+                    erts_debug:set_internal_state(coredump, not_used),
+                    ct:fail("Failed memory check")
             end
     end.
 
