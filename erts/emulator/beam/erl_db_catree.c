@@ -166,7 +166,12 @@ static void split_catree(DbTableCATree *tb,
 static void join_catree(DbTableCATree *tb,
                         DbTableCATreeNode *thiz,
                         DbTableCATreeNode *parent);
-
+static ERTS_INLINE
+int try_wlock_base_node(DbTableCATreeBaseNode *base_node);
+static ERTS_INLINE
+void wunlock_base_node(DbTableCATreeNode *base_node);
+static ERTS_INLINE
+void wlock_base_node_no_stats(DbTableCATreeNode *base_node);
 
 /*
 ** External interface
@@ -664,6 +669,41 @@ static void dbg_provoke_random_splitjoin(DbTableCATree* tb,
 #  define dbg_provoke_random_splitjoin(T,N)
 #endif /* PROVOKE_RANDOM_SPLIT_JOIN */
 
+static ERTS_NOINLINE
+void do_random_join(DbTableCATree* tb, Uint rand)
+{
+    DbTableCATreeNode* node = GET_ROOT_ACQB(tb);
+    DbTableCATreeNode* parent = NULL;
+    int level = 0;
+    while (!node->is_base_node) {
+        parent = node;
+        if ((rand & (1 << level)) == 0) {
+            node = GET_LEFT_ACQB(node);
+        } else {
+            node = GET_RIGHT_ACQB(node);
+        }
+        level++;
+    }
+    if (parent != NULL && !try_wlock_base_node(&node->u.base)) {
+        if (node->u.base.is_valid) {
+            join_catree(tb, node, parent);
+        } else {
+            wunlock_base_node(node);
+        }
+    }
+}
+
+static ERTS_INLINE
+void do_random_join_with_low_probability(DbTableCATree* tb, Uint seed)
+{
+#ifndef ERTS_DB_CA_TREE_NO_RANDOM_JOIN_WITH_LOW_PROBABILITY
+    Uint32 rand = erts_sched_local_random(seed);
+    if (((rand & 0xFFF00000)) == 0) {
+        do_random_join(tb, rand);
+    }
+#endif
+}
+
 static ERTS_INLINE
 int try_wlock_base_node(DbTableCATreeBaseNode *base_node)
 {
@@ -732,7 +772,15 @@ void rlock_base_node(DbTableCATreeNode *base_node)
 }
 
 static ERTS_INLINE
-void runlock_base_node(DbTableCATreeNode *base_node)
+void runlock_base_node(DbTableCATreeNode *base_node, DbTableCATree* tb)
+{
+    ASSERT(base_node->is_base_node);
+    erts_rwmtx_runlock(&base_node->u.base.lock);
+    do_random_join_with_low_probability(tb, (Uint)base_node);
+}
+
+static ERTS_INLINE
+void runlock_base_node_no_rand(DbTableCATreeNode *base_node)
 {
     ASSERT(base_node->is_base_node);
     erts_rwmtx_runlock(&base_node->u.base.lock);
@@ -814,7 +862,7 @@ void unlock_iter_base_node(CATreeRootIterator* iter)
 {
     ASSERT(iter->locked_bnode);
     if (iter->read_only)
-        runlock_base_node(iter->locked_bnode);
+        runlock_base_node(iter->locked_bnode, iter->tb);
     else if (iter->locked_bnode->u.base.is_valid) {
         wunlock_adapt_base_node(iter->tb, iter->locked_bnode,
                                 iter->bnode_parent, iter->bnode_level);
@@ -874,7 +922,7 @@ DbTableCATreeNode* find_rlock_valid_base_node(DbTableCATree* tb, Eterm key)
         rlock_base_node(base_node);
         if (base_node->u.base.is_valid)
             break;
-        runlock_base_node(base_node);
+        runlock_base_node_no_rand(base_node);
     }
     return base_node;
 }
@@ -1521,7 +1569,7 @@ static int db_get_catree(Process *p, DbTable *tbl, Eterm key, Eterm *ret)
     int result = db_get_tree_common(p, &tb->common,
                                     node->u.base.root,
                                     key, ret, NULL);
-    runlock_base_node(node);
+    runlock_base_node(node, tb);
     return result;
 }
 
@@ -1804,7 +1852,7 @@ static int db_member_catree(DbTable *tbl, Eterm key, Eterm *ret)
     int result = db_member_tree_common(&tb->common,
                                        node->u.base.root,
                                        key, ret, NULL);
-    runlock_base_node(node);
+    runlock_base_node(node, tb);
     return result;
 }
 
@@ -1816,7 +1864,7 @@ static int db_get_element_catree(Process *p, DbTable *tbl,
     int result = db_get_element_tree_common(p, &tb->common,
                                             node->u.base.root,
                                             key, ndex, ret, NULL);
-    runlock_base_node(node);
+    runlock_base_node(node, tb);
     return result;
 }
 
