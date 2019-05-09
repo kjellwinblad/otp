@@ -18,4 +18,4 @@ source otp_env.source
 
 erlc ets_SUITE.erl
 
-erl -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
+erl +sbt nnts -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"

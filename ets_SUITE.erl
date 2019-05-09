@@ -6912,7 +6912,9 @@ throughput_benchmark() ->
          table_types =
              [
               [set, public, {decentralized_counters, false}, {write_concurrency, true}, {read_concurrency, true}],
-              [set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}]
+              [set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}],
+	      [ordered_set, public, {decentralized_counters, false}, {write_concurrency, true}, {read_concurrency, true}],
+              [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}]
              ],
          scenarios =
               [
