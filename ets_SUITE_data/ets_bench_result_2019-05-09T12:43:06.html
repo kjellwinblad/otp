@@ -56,52 +56,52 @@
 #BENCHMARK STARTED$
 Scenario:  50.000000% insert,  50.000000% delete | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 64$
-[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 1246734.333333; 2076455.333333; 3666365.555556; 5712256.777778; 7499770.111111; 4649230.222222; 6414588.888889$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1239596.777778; 2231275.111111; 4171740.111111; 7471454.777778; 13982851.000000; 5415921.555556; 5683169.222222$
-[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 705086.000000; 1322824.444444; 2314130.777778; 3961291.888889; 5618640.222222; 3356773.555556; 5208184.555556$
-[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 762958.222222; 1426605.888889; 2623292.000000; 5025847.333333; 8822280.777778; 14586246.111111; 19951384.555556$
+[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 1131979.111111; 1640020.111111; 2658231.888889; 3903197.111111; 4252050.666667; 4304574.888889; 6029856.111111$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1171406.555556; 1832948.000000; 3511906.555556; 6693365.777778; 12197122.666667; 22384412.555556; 5703243.444444$
+[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 643977.888889; 1013531.222222; 1624051.777778; 2550747.222222; 2960351.888889; 3549434.000000; 5363939.333333$
+[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 748528.444444; 1050967.666667; 1968962.555556; 4017023.555556; 7261250.555556; 14627453.555556; 20916859.222222$
 Scenario:  10.000000% insert,  10.000000% delete,  80.000000% lookup | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 64$
-[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 1155223.777778; 2039449.000000; 3910154.666667; 7046616.444444; 12959835.666667; 12806327.666667; 17530382.555556$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1159537.444444; 2080132.888889; 3881124.666667; 7222616.000000; 13961252.444444; 22544961.666667; 28883354.666667$
-[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 768279.000000; 1450694.777778; 2463336.111111; 4725282.888889; 8368873.333333; 9340262.555556; 12665661.444444$
-[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 823355.555556; 1397033.444444; 2488719.777778; 4715817.222222; 8656876.555556; 14930508.888889; 21737021.777778$
+[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 1116160.444444; 1760999.666667; 3251223.555556; 5868850.777778; 9131235.333333; 13007886.444444; 15267663.444444$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1119598.111111; 1787317.777778; 3370837.111111; 6399763.222222; 11711307.777778; 22964766.777778; 29263640.111111$
+[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 830514.000000; 1205501.555556; 2075896.111111; 3657128.000000; 7542738.666667; 14041447.444444; 19004071.000000$
+[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 724853.000000; 1238208.111111; 2183720.444444; 4182157.222222; 7553645.555556; 15227242.333333; 21872480.444444$
 Scenario:  1.000000% insert,  1.000000% delete,  98.000000% lookup | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 64$
-[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 1196029.333333; 2300251.777778; 4466232.666667; 8142706.777778; 16123595.666667; 27202285.222222; 33140889.888889$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1139953.111111; 2448485.000000; 4468389.111111; 8126141.555556; 15887686.111111; 30169700.111111; 35387120.333333$
-[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 828808.111111; 1548607.777778; 2893939.777778; 5175578.000000; 9857132.444444; 17368423.555556; 24274929.333333$
-[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 818751.222222; 1547248.888889; 2874027.555556; 5352845.444444; 10106291.222222; 18732440.111111; 25433764.777778$
+[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 1191202.000000; 2144412.333333; 4235815.666667; 8078839.222222; 14402628.444444; 26919241.888889; 32293612.444444$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1217098.000000; 2213966.555556; 4238513.333333; 8475997.777778; 14942249.666667; 29962557.333333; 35380160.666667$
+[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 769871.666667; 1593919.111111; 2857066.666667; 5174682.777778; 9403462.444444; 17183180.111111; 23771914.222222$
+[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 838876.777778; 1489057.666667; 2840546.555556; 5188753.888889; 9446005.333333; 18422539.111111; 25642801.777778$
 Scenario:  100.000000% lookup | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 64$
-[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 1224814.555556; 2375790.888889; 4629895.444444; 8682647.888889; 17766648.222222; 33753161.333333; 39972461.333333$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1228709.111111; 2460523.111111; 4687840.444444; 8736124.666667; 17188720.111111; 34198850.222222; 39371989.444444$
-[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 862580.000000; 1730076.111111; 3306239.333333; 6222154.555556; 13178890.333333; 26422046.222222; 31393223.444444$
-[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 873325.555556; 1704742.111111; 3384301.666667; 6198967.777778; 13215104.666667; 24162165.444444; 31339230.111111$
+[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 1261164.666667; 2399619.333333; 4712216.444444; 9245208.222222; 17232135.000000; 33288932.666667; 39207563.666667$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1298977.555556; 2390447.888889; 4679326.222222; 9186031.333333; 17053916.555556; 33899411.000000; 39553239.888889$
+[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 863201.444444; 1692719.666667; 3387148.888889; 6394269.666667; 12231884.777778; 24715195.777778; 31745506.555556$
+[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 904471.000000; 1731559.333333; 3475948.000000; 6803620.888889; 12281954.222222; 24848598.222222; 31672360.777778$
 Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq10 | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 64$
-[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 502302.000000; 931317.555556; 1714478.555556; 3094420.777778; 5464047.444444; 6646295.333333; 8820950.000000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 477493.444444; 914200.777778; 1672927.444444; 3177273.222222; 5781712.444444; 9161371.000000; 11999226.444444$
-[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 400939.444444; 750107.333333; 1370601.666667; 2430833.888889; 4475368.888889; 5619737.111111; 7391598.333333$
-[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 368762.888889; 765077.000000; 1419387.444444; 2603085.666667; 4738288.777778; 8342576.555556; 11927321.777778$
+[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 510760.666667; 784350.555556; 1385112.111111; 2376948.555556; 3868165.333333; 5379704.666667; 6980583.111111$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 451779.000000; 767545.555556; 1443142.444444; 2616059.444444; 4272954.777778; 6346948.222222; 7853976.888889$
+[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 393014.000000; 646446.000000; 1102151.666667; 2011221.888889; 3272593.666667; 4696552.777778; 6333409.888889$
+[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 391041.000000; 637168.555556; 1161194.444444; 2091059.222222; 3821216.444444; 6006667.000000; 7566187.333333$
 Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq1000 | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 64$
-[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 10402.333333; 20436.444444; 38907.444444; 71691.666667; 142302.222222; 270429.111111; 413692.444444$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 10480.777778; 22524.000000; 41606.222222; 72063.777778; 147481.333333; 281361.333333; 397058.333333$
-[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 8657.888889; 18483.777778; 32732.555556; 61836.111111; 113887.555556; 218217.111111; 304752.888889$
-[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 9406.111111; 18092.666667; 32864.888889; 61574.888889; 115441.555556; 224046.666667; 299941.333333$
+[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 11568.333333; 20212.222222; 39839.555556; 81514.333333; 134980.555556; 289002.222222; 374970.111111$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 10802.000000; 21431.777778; 42353.666667; 73522.444444; 134368.333333; 251462.222222; 373599.333333$
+[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 8547.000000; 16425.444444; 34631.444444; 63467.777778; 115149.111111; 221100.000000; 283533.666667$
+[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 8143.333333; 17268.444444; 31635.333333; 59523.222222; 110309.111111; 212144.777778; 290473.888889$
 Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% selectAll | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 64$
-[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 2121.888889; 4834.111111; 8425.000000; 15826.222222; 32512.111111; 57042.000000; 86741.333333$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 2124.555556; 5762.333333; 7963.888889; 15889.888889; 31627.777778; 59252.555556; 102897.777778$
-[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 2493.777778; 6056.222222; 10558.333333; 17631.666667; 40983.555556; 66177.111111; 77159.333333$
-[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 2427.222222; 5923.666667; 10347.555556; 22430.444444; 43940.222222; 84978.222222; 109887.555556$
+[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 2336.555556; 4095.888889; 11002.777778; 16928.333333; 30939.555556; 58371.777778; 86832.888889$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 2112.111111; 4927.000000; 9743.222222; 14935.222222; 28423.333333; 57424.222222; 82584.666667$
+[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 2439.666667; 5485.111111; 9218.666667; 17645.333333; 36360.555556; 57114.666667; 75579.222222$
+[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 2877.000000; 4340.333333; 11296.000000; 20224.333333; 36003.222222; 84888.555556; 113255.111111$
 Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% partial_select1000 | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 64$
-[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 2373.333333; 3580.888889; 6637.222222; 12558.222222; 23770.333333; 50005.555556; 67260.333333$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1834.666667; 3403.444444; 6908.555556; 11308.666667; 31419.222222; 49530.555556; 65036.000000$
-[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 2474.000000; 4362.000000; 8367.111111; 15372.111111; 33708.444444; 54738.444444; 61163.666667$
-[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 2256.888889; 4502.222222; 8263.111111; 15900.555556; 35993.222222; 70798.222222; 78478.555556$
+[set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 1972.555556; 3725.555556; 5869.444444; 12465.222222; 24040.222222; 48045.777778; 66225.222222$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1652.666667; 3070.444444; 7769.000000; 13010.333333; 27774.555556; 50061.000000; 67520.888889$
+[ordered_set,public,{decentralized_counters,false},{write_concurrency,true},{read_concurrency,true}] ; 2317.000000; 4585.666667; 8858.333333; 15842.555556; 28230.000000; 50769.333333; 64363.444444$
+[ordered_set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1560.333333; 4277.666667; 9240.222222; 16308.000000; 30036.666667; 61285.222222; 75562.222222$
 
 #BENCHMARK ENDED$
 
