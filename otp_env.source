@@ -1,0 +1,23 @@
+NEEDLE=$(pwd);
+
+while [ "$NEEDLE" != "/" ] ; do
+   find "$NEEDLE" -maxdepth 1 -type d -name ".git" | grep -q "." ;
+
+   if [ $? -eq 0 ]; then
+       export ERL_TOP=$NEEDLE;
+       export TESTROOT=$ERL_TOP/release/tests;
+       export TESTSERVER=$TESTROOT/test_server;
+       export PATH=$ERL_TOP/bin:$PATH;
+       export MAKEFLAGS=-j4;
+
+       #       mkdir -p $ERL_TOP/.vscode/ && cp ~/.otp_env/tasks.json $ERL_TOP/.vscode/
+
+       echo "\$ERL_TOP = $ERL_TOP";
+
+       break;
+   fi
+
+   NEEDLE=$(dirname "$NEEDLE");
+done
+
+ulimit -c unlimited
