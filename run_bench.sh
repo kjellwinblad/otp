@@ -7,6 +7,8 @@ sudo apt-get update
 
 sudo apt-get install -y xsltproc fop openssl libssl-dev unixodbc-dev autoconf build-essential m4 libssh-dev unixodbc-dev libncurses5-dev libncursesw5-dev numactl tmux htop
 
+git clean -d -x -f
+
 numactl --hardware >> ets_SUITE_data/numactl_hardware
 
 cat /proc/cpuinfo >> ets_SUITE_data/proc_cpuinfo
@@ -18,8 +20,6 @@ lsb_release -a >> ets_SUITE_data/os_info
 echo LINUX >> ets_SUITE_data/os_info
 
 uname -r >> ets_SUITE_data/os_info
-
-git clean -d -x -f
 
 source otp_env.source
 
