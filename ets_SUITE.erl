@@ -74,6 +74,7 @@
          smp_ordered_iteration/1,
          smp_select_replace/1, otp_8166/1, otp_8732/1, delete_unfix_race/1]).
 -export([throughput_benchmark/0,
+         throughput_benchmark_change_size/0,
          throughput_benchmark/1,
          test_throughput_benchmark/1,
          long_throughput_benchmark/1]).
@@ -6909,6 +6910,66 @@ throughput_benchmark() ->
          recover_time_ms = 1000,
          thread_counts = [1,2,4,8,16,32,64],
          key_ranges = [1000000],
+         table_types =
+             [
+              [set, public, {decentralized_counters, false}, {write_concurrency, true}, {read_concurrency, true}],
+              [set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}],
+	      [ordered_set, public, {decentralized_counters, false}, {write_concurrency, true}, {read_concurrency, true}],
+              [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}]
+             ],
+         scenarios =
+              [
+               [
+                {0.5, insert},
+                {0.5, delete}
+               ],
+               [
+                {0.1, insert},
+                {0.1, delete},
+                {0.8, lookup}
+               ],
+               [
+                {0.01, insert},
+                {0.01, delete},
+                {0.98, lookup}
+               ],
+               [
+                {1.0, lookup}
+               ],
+               [
+                {0.1, insert},
+                {0.1, delete},
+                {0.4, lookup},
+                {0.4, nextseq10}
+               ],
+               [
+                {0.1, insert},
+                {0.1, delete},
+                {0.4, lookup},
+                {0.4, nextseq1000}
+               ],
+               [
+                {0.1, insert},
+                {0.1, delete},
+                {0.79, lookup},
+                {0.01, selectAll}
+               ],
+               [
+                {0.1, insert},
+                {0.1, delete},
+                {0.79, lookup},
+                {0.01, partial_select1000}
+               ]
+              ],
+         print_result_paths_fun = fun stdout_notify_res/2}).
+
+throughput_benchmark_change_size() ->
+    throughput_benchmark(
+      #ets_throughput_bench_config{
+         benchmark_duration_ms = 9000,
+         recover_time_ms = 1000,
+         thread_counts = [1,2,4,8],
+         key_ranges = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288],
          table_types =
              [
               [set, public, {decentralized_counters, false}, {write_concurrency, true}, {read_concurrency, true}],
