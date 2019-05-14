@@ -554,6 +554,19 @@ _ET_DECLARE_CHECKED(Eterm*,tuple_val,Wterm)
 	(t)[8] = (e8), \
         make_tuple(t))
 
+#define TUPLE9(t,e1,e2,e3,e4,e5,e6,e7,e8,e9) \
+        ((t)[0] = make_arityval(9), \
+        (t)[1] = (e1), \
+        (t)[2] = (e2), \
+        (t)[3] = (e3), \
+        (t)[4] = (e4), \
+        (t)[5] = (e5), \
+	(t)[6] = (e6), \
+	(t)[7] = (e7), \
+	(t)[8] = (e8), \
+        (t)[9] = (e9), \
+        make_tuple(t))
+
 /* This macro get Size bits starting at low order position Pos
    and adjusts the bits to the right 
    bits are numbered from 0 - (sizeof(Uint)*8-1) */

@@ -47,6 +47,7 @@ typedef struct hash_db_term {
     DbTerm dbterm;         /* The actual term */
 } HashDbTerm;
 
+//#define ERTS_DB_HASH_LOCK_CNT 256
 #ifdef ERTS_DB_HASH_LOCK_CNT
 #define DB_HASH_LOCK_CNT ERTS_DB_HASH_LOCK_CNT
 #else
@@ -83,6 +84,9 @@ typedef struct db_table_hash {
     erts_atomic_t fixdel;  /* (FixedDeletion*) */
     erts_atomic_t is_resizing; /* grow/shrink in progress */
     DbTableHashFineLocks* locks;
+
+    erts_atomic_t grow_cnt;
+    erts_atomic_t shrink_cnt;
 } DbTableHash;
 
 
@@ -111,6 +115,8 @@ typedef struct {
     int max_chain_len;
     int min_chain_len;
     int kept_items;
+    Uint grow_cnt;
+    Uint shrink_cnt;
 }DbHashStats;
 
 void db_calc_stats_hash(DbTableHash* tb, DbHashStats*);

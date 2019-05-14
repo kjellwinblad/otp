@@ -769,6 +769,10 @@ int db_create_hash(Process *p, DbTable *tbl)
     else { /* coarse locking */
 	tb->locks = NULL;
     }
+
+    erts_atomic_init_nob(&tb->grow_cnt, 0);
+    erts_atomic_init_nob(&tb->shrink_cnt, 0);
+
     ERTS_THR_MEMORY_BARRIER;
     return DB_ERROR_NONE;
 }
@@ -2942,6 +2946,8 @@ static void grow(DbTableHash* tb, int nitems)
             goto abort; /* already done (race) */
         }
 
+        erts_atomic_inc_nob(&tb->grow_cnt);
+
         /* Ensure that the slot nactive exists */
         if (nactive == tb->nslots) {
             /* Time to get a new segment */
@@ -3034,6 +3040,9 @@ static void shrink(DbTableHash* tb, int nitems)
         if (!(nactive > FIRST_SEGSZ && nitems < SHRINK_LIMIT(nactive))) {
             goto abort; /* already done (race) */
         }
+
+        erts_atomic_inc_nob(&tb->shrink_cnt);
+
         src_ix = nactive - 1;
         low_szm = erts_atomic_read_nob(&tb->szm) >> 1;
         dst_ix = src_ix & low_szm;
@@ -3359,6 +3368,8 @@ void db_calc_stats_hash(DbTableHash* tb, DbHashStats* stats)
        ie binomial distribution (not taking the linear hashing into acount) */
     stats->std_dev_expected = sqrt(stats->avg_chain_len * (1 - 1.0/NACTIVE(tb)));
     stats->kept_items = kept_items;
+    stats->grow_cnt = erts_atomic_read_nob(&tb->grow_cnt);
+    stats->shrink_cnt = erts_atomic_read_nob(&tb->shrink_cnt);
 }
 
 /* For testing only */
