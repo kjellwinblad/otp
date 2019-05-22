@@ -37,6 +37,7 @@
          run_phash2_benchmarks/0,
          test_phash2_binary_aligned_and_unaligned_equal/1,
          test_phash2_4GB_plus_bin/1,
+         test_phash2_10MB_plus_bin/1,
          test_phash2_large_map/1,
          test_phash2_shallow_long_list/1,
          test_phash2_deep_list/1,
@@ -105,6 +106,7 @@ all() ->
      test_phash2, otp_5292, bit_level_binaries, otp_7127,
      test_hash_zero, test_phash2_binary_aligned_and_unaligned_equal,
      test_phash2_4GB_plus_bin,
+     test_phash2_10MB_plus_bin,
      {group, phash2_benchmark_tests},
      {group, phash2_benchmark}].
 
@@ -567,13 +569,37 @@ test_phash2_4GB_plus_bin(Config) when is_list(Config) ->
       fun() ->
               erts_debug:set_internal_state(available_internal_state, true),
               %% Created Bin4GB here so it only needs to be created once
+              erts_debug:set_internal_state(force_gc, self()),
               Bin4GB = get_4GB_bin(),
-              test_phash2_4GB_plus_bin_helper1(Bin4GB, <<>>, <<>>),
-              test_phash2_4GB_plus_bin_helper1(Bin4GB, make_random_bin(65535), <<>>),
-              test_phash2_4GB_plus_bin_helper1(Bin4GB, make_random_bin(655), <<3:5>>),
+              test_phash2_plus_bin_helper1(Bin4GB, <<>>, <<>>, 13708901),
+              erts_debug:set_internal_state(force_gc, self()),
+              test_phash2_plus_bin_helper1(Bin4GB, <<>>, <<3:5>>, 66617678),
+              erts_debug:set_internal_state(force_gc, self()),
+              test_phash2_plus_bin_helper1(Bin4GB, <<13>>, <<>>, 31308392),
               erts_debug:set_internal_state(force_gc, self()),
               erts_debug:set_internal_state(available_internal_state, false)
       end).
+
+
+test_phash2_10MB_plus_bin(Config) when is_list(Config) ->
+    erts_debug:set_internal_state(available_internal_state, true),
+    erts_debug:set_internal_state(force_gc, self()),
+    Bin10MB = get_10MB_bin(),
+    test_phash2_plus_bin_helper1(Bin10MB, <<>>, <<>>, 22776267),
+    erts_debug:set_internal_state(force_gc, self()),
+    test_phash2_plus_bin_helper1(Bin10MB, <<>>, <<3:5>>, 124488972),
+    erts_debug:set_internal_state(force_gc, self()),
+    test_phash2_plus_bin_helper1(Bin10MB, <<13>>, <<>>, 72958346),
+    erts_debug:set_internal_state(force_gc, self()),
+    erts_debug:set_internal_state(available_internal_state, false).
+
+get_10MB_bin() ->
+    TmpBin = make_random_bin(10239),
+    Bin = erlang:iolist_to_binary([0, TmpBin]),
+    IOList10MB = duplicate_iolist(Bin, 10),
+    Bin10MB = erlang:iolist_to_binary(IOList10MB),
+    10485760 = size(Bin10MB),
+    Bin10MB.
 
 get_4GB_bin() ->
     TmpBin = make_random_bin(65535),
@@ -588,23 +614,32 @@ duplicate_iolist(IOList, 0) ->
 duplicate_iolist(IOList, NrOfTimes) ->
     duplicate_iolist([IOList, IOList], NrOfTimes - 1).
 
-test_phash2_4GB_plus_bin_helper1(Bin4GB, ExtraBytes, ExtraBits) ->
-    test_phash2_4GB_plus_bin_helper2(Bin4GB, fun id/1, ExtraBytes, ExtraBits),
-    test_phash2_4GB_plus_bin_helper2(Bin4GB, fun make_unaligned_sub_bitstring/1, ExtraBytes, ExtraBits).
+test_phash2_plus_bin_helper1(Bin4GB, ExtraBytes, ExtraBits, ExpectedHash) ->
+    test_phash2_plus_bin_helper2(Bin4GB, fun id/1, ExtraBytes, ExtraBits, ExpectedHash),
+    test_phash2_plus_bin_helper2(Bin4GB, fun make_unaligned_sub_bitstring/1, ExtraBytes, ExtraBits, ExpectedHash).
 
-test_phash2_4GB_plus_bin_helper2(Bin4GB, TransformerFun, ExtraBytes, ExtraBits) ->
+test_phash2_plus_bin_helper2(Bin, TransformerFun, ExtraBytes, ExtraBits, ExpectedHash) ->
     ExtraBitstring = << ExtraBytes/binary, ExtraBits/bitstring >>,
     LargerBitstring = << ExtraBytes/binary,
                          ExtraBits/bitstring,
-                         Bin4GB/bitstring >>,
+                         Bin/bitstring >>,
     LargerTransformedBitstring = TransformerFun(LargerBitstring),
-    true = (size(ExtraBitstring) < 4294967296),
     ExtraBitstringHash = erlang:phash2(ExtraBitstring),
-    true = (size(LargerTransformedBitstring) >= 4294967296),
-    ExtraBitstringHash = erlang:phash2(LargerTransformedBitstring),
-    erts_debug:set_internal_state(force_gc, self()),
-    erts_debug:set_internal_state(reds_left, 3),
-    ExtraBitstringHash = erlang:phash2(LargerTransformedBitstring).
+    ExpectedHash =
+        case size(LargerTransformedBitstring) < 4294967296 of
+            true ->
+                erts_debug:set_internal_state(force_gc, self()),
+                erts_debug:set_internal_state(reds_left, 1),
+                Hash = erlang:phash2(LargerTransformedBitstring),
+                Hash = erlang:phash2(LargerTransformedBitstring),
+                Hash;
+            false ->
+                erts_debug:set_internal_state(force_gc, self()),
+                erts_debug:set_internal_state(reds_left, 1),
+                ExtraBitstringHash = erlang:phash2(LargerTransformedBitstring),
+                ExtraBitstringHash = erlang:phash2(LargerTransformedBitstring),
+                ExtraBitstringHash
+        end.
 
 run_when_enough_resources(Fun) ->
     case {total_memory(), erlang:system_info(wordsize)} of
