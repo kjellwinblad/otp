@@ -34,6 +34,7 @@
          end_per_suite/1,init_per_group/2,end_per_group/2]).
 
 -export([test_phash2_no_diff/1,
+         test_phash2_no_diff_long/1,
          test_phash2_no_diff_between_versions/1]).
 
 -include_lib("common_test/include/ct.hrl").
@@ -45,6 +46,7 @@ all() -> [{group, proper}].
 
 groups() ->
     [{proper, [], [test_phash2_no_diff,
+                   test_phash2_no_diff_long,
                    test_phash2_no_diff_between_versions]}].
 
 
@@ -70,6 +72,11 @@ end_per_group(_, Config) ->
 test_phash2_no_diff(Config) when is_list(Config) ->
     true = ct_property_test:quickcheck(
              phash2_properties:prop_phash2_same_with_same_input(),
+             Config).
+
+test_phash2_no_diff_long(Config) when is_list(Config) ->
+    true = ct_property_test:quickcheck(
+             phash2_properties:prop_phash2_same_with_same_long_input(),
              Config).
 
 test_phash2_no_diff_between_versions(Config) when is_list(Config) ->

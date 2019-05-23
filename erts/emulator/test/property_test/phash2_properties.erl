@@ -20,21 +20,14 @@
 
 -module(phash2_properties).
 
--compile(export_all).
-
--proptest(eqc).
--proptest([proper]).
-
--ifndef(PROPER).
--define(EQC,true).
--endif.
-
 -ifdef(PROPER).
--include_lib("proper/include/proper.hrl").
--define(MOD_eqc,proper).
--endif.
 
--include_lib("common_test/include/ct.hrl").
+-include_lib("proper/include/proper.hrl").
+-export([prop_phash2_same_with_same_input/0,
+         prop_phash2_same_with_same_long_input/0,
+         prop_phash2_same_in_different_versions/1,
+         prop_phash2_same_in_different_versions_with_long_input/1]).
+-proptest([proper]).
 
 %%--------------------------------------------------------------------
 %% Properties --------------------------------------------------------
@@ -42,6 +35,13 @@
 
 prop_phash2_same_with_same_input() ->
     ?FORALL(T, any(), erlang:phash2(T) =:= erlang:phash2(T)).
+
+prop_phash2_same_with_same_long_input() ->
+    ?FORALL(T, any(),
+            begin
+                BigTerm = lists:duplicate(10000, T),
+                erlang:phash2(BigTerm) =:= erlang:phash2(BigTerm)
+            end).
 
 prop_phash2_same_in_different_versions(DifferntVersionNode) ->
     ?FORALL(T, any(),
@@ -60,3 +60,4 @@ prop_phash2_same_in_different_versions_with_long_input(DifferntVersionNode) ->
 %% Generators  -------------------------------------------------------
 %%--------------------------------------------------------------------
 
+-endif.
