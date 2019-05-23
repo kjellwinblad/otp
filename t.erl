@@ -4,20 +4,26 @@
 
 
 go() ->
-    go(256).
+    [go(G) || G <- [500,5000,50000,500000]].
 
 go(Keys) ->
-    go(Keys, 1000*1000).
+    go(Keys, 1000*1000*10).
 
 go(Keys, N) ->
-    go(Keys, N, true).
+    {Time1, ok} = timer:tc(fun()->go(Keys, N, true)end),
+    {Time2, ok} = timer:tc(fun()->go(Keys, N, false)end),
+    io:format("~f% slower than without  (time with: ~p time without ~p)~n",[(((Time1)/(Time2))-1)*100, Time1, Time2]).
 
 go(Keys, N, WC) ->
-    T = ets:new(xxx,[public,{write_concurrency,WC}]),
+    T = ets:new(xxx,[public,{write_concurrency,true},{decentralized_counters, WC}]),
     loop(T, N, Keys, 1),
     Stats = stats(T, N),
     ets:delete(T),
-    Stats.
+    erlang:display(Stats),
+    erlang:display([S || S <- Stats, element(1,S) =:= grows orelse element(1,S) =:= shrinks]),
+    io:format("~p~n",[lists:sum([element(2,S) || S <- Stats, element(1,S) =:= grows orelse element(1,S) =:= shrinks])]),
+    GropwsAndShrinks = lists:sum([element(2,S) || S <- Stats, element(1,S) =:= grows orelse element(1,S) =:= shrinks]),
+    io:format("GrowsAndShrinksPerOp ~f~n",[GropwsAndShrinks/(N*2)]).
 
 stats(T, Ops) ->
     Keys = ets:info(T, size),
@@ -42,6 +48,7 @@ loop(T, N, Keys, I) ->
 
     case (I band (I-1)) of
         0 ->
+            erlang:display(stats(T, I*2)),
             io:format("~p: ~p\n", [I, ets:info(T,size)]);
         _ ->
             ok

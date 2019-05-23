@@ -47,7 +47,7 @@ typedef struct hash_db_term {
     DbTerm dbterm;         /* The actual term */
 } HashDbTerm;
 
-//#define ERTS_DB_HASH_LOCK_CNT 256
+#define ERTS_DB_HASH_LOCK_CNT 256
 #ifdef ERTS_DB_HASH_LOCK_CNT
 #define DB_HASH_LOCK_CNT ERTS_DB_HASH_LOCK_CNT
 #else

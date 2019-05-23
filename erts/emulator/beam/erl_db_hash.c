@@ -522,12 +522,15 @@ db_finalize_dbterm_hash(int cret, DbUpdateHandle* handle);
 
 static ERTS_INLINE void try_shrink(DbTableHash* tb, Sint nitems)
 {
-    int nactive = NACTIVE(tb);
-    if (nactive > FIRST_SEGSZ && nitems < SHRINK_LIMIT(nactive)
-	&& !IS_FIXED(tb)) {
-	shrink(tb, nitems);
-    }
-}	
+    Uint32 rand = erts_sched_local_random((Sint)&tb);
+    //   if (((rand & 15)) == 0) {
+        int nactive = NACTIVE(tb);
+        if (nactive > FIRST_SEGSZ && nitems < SHRINK_LIMIT(nactive)
+            && !IS_FIXED(tb)) {
+            shrink(tb, nitems);
+        }
+        //}
+}
 
 /* Is this a live object (not pseodo-deleted) with the specified key? 
 */
