@@ -172,7 +172,11 @@ static ERTS_INLINE
 void wunlock_base_node(DbTableCATreeNode *base_node);
 static ERTS_INLINE
 void wlock_base_node_no_stats(DbTableCATreeNode *base_node);
-
+static ERTS_INLINE
+void wunlock_adapt_base_node(DbTableCATree* tb,
+                             DbTableCATreeNode* node,
+                             DbTableCATreeNode* parent,
+                             int current_level);
 /*
 ** External interface
 */
@@ -215,12 +219,14 @@ DbTableMethod db_catree =
  * Constants
  */
 
-#define ERL_DB_CATREE_LOCK_FAILURE_CONTRIBUTION 200
+#define ERL_DB_CATREE_LOCK_FAILURE_CONTRIBUTION 310
 #define ERL_DB_CATREE_LOCK_SUCCESS_CONTRIBUTION (-1)
+#define ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION (-900)
+#define ERL_DB_CATREE_LOCK_GRAVITY_PATTERN (0xFFFC0000)
 #define ERL_DB_CATREE_LOCK_MORE_THAN_ONE_CONTRIBUTION (-10)
 #define ERL_DB_CATREE_HIGH_CONTENTION_LIMIT 1000
 #define ERL_DB_CATREE_LOW_CONTENTION_LIMIT (-1000)
-#define ERL_DB_CATREE_MAX_ROUTE_NODE_LAYER_HEIGHT 14
+#define ERL_DB_CATREE_MAX_ROUTE_NODE_LAYER_HEIGHT 16
 
 /*
  * Internal CA tree related helper functions and macros
@@ -685,11 +691,12 @@ void do_random_join(DbTableCATree* tb, Uint rand)
         level++;
     }
     if (parent != NULL && !try_wlock_base_node(&node->u.base)) {
-        if (node->u.base.is_valid) {
-            join_catree(tb, node, parent);
-        } else {
+        if (!node->u.base.is_valid) {
             wunlock_base_node(node);
+            return;
         }
+        node->u.base.lock_statistics += ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION;
+        wunlock_adapt_base_node(tb, node, parent, level);
     }
 }
 
@@ -698,7 +705,7 @@ void do_random_join_with_low_probability(DbTableCATree* tb, Uint seed)
 {
 #ifndef ERTS_DB_CA_TREE_NO_RANDOM_JOIN_WITH_LOW_PROBABILITY
     Uint32 rand = erts_sched_local_random(seed);
-    if (((rand & 0xFFF00000)) == 0) {
+    if (((rand & ERL_DB_CATREE_LOCK_GRAVITY_PATTERN)) == 0) {
         do_random_join(tb, rand);
     }
 #endif
