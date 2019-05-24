@@ -41,25 +41,25 @@ erlc ets_SUITE.erl
 # Same as db (fills one chip at a time)
 erl +sbt tnnps -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
 erl +sbt tnnps -eval "ets_SUITE:lookup_catree_par_vs_seq_init_benchmark(),erlang:halt()"
-# Second round with random join disabled
+# # Second round with random join disabled
 
-make clean
+# make clean
 
-export CFLAGS="-O2 -g -DERTS_DB_CA_TREE_NO_RANDOM_JOIN_WITH_LOW_PROBABILITY=1"
+# export CFLAGS="-O2 -g -DERTS_DB_CA_TREE_NO_RANDOM_JOIN_WITH_LOW_PROBABILITY=1"
 
-./otp_build autoconf
+# ./otp_build autoconf
 
-./configure --with-ets-write-concurrency-locks=256
+# ./configure --with-ets-write-concurrency-locks=256
 
-make
+# make
 
-source otp_env.source
+# source otp_env.source
 
-erlc ets_SUITE.erl
+# erlc ets_SUITE.erl
 
-# Spread as much as possible
-#erl +sbt s -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
+# # Spread as much as possible
+# #erl +sbt s -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
 
-# Same as db (fills one chip at a time)
-erl +sbt tnnps -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
-erl +sbt tnnps -eval "ets_SUITE:lookup_catree_par_vs_seq_init_benchmark(),erlang:halt()"
+# # Same as db (fills one chip at a time)
+# erl +sbt tnnps -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
+# erl +sbt tnnps -eval "ets_SUITE:lookup_catree_par_vs_seq_init_benchmark(),erlang:halt()"
