@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+
+<!-- %% -->
+<!-- %% %CopyrightBegin% -->
+<!-- %% -->
+<!-- %% Copyright Ericsson AB and Kjell Winblad 1996-2019. All Rights Reserved. -->
+<!-- %% -->
+<!-- %% Licensed under the Apache License, Version 2.0 (the "License"); -->
+<!-- %% you may not use this file except in compliance with the License. -->
+<!-- %% You may obtain a copy of the License at -->
+<!-- %% -->
+<!-- %%     http://www.apache.org/licenses/LICENSE-2.0 -->
+<!-- %% -->
+<!-- %% Unless required by applicable law or agreed to in writing, software -->
+<!-- %% distributed under the License is distributed on an "AS IS" BASIS, -->
+<!-- %% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. -->
+<!-- %% See the License for the specific language governing permissions and -->
+<!-- %% limitations under the License. -->
+<!-- %% -->
+<!-- %% %CopyrightEnd% -->
+<!-- %% -->
+<!-- %% Author: Kjell Winblad -->
+<!-- %% -->
+  
+  <head>
+    <meta charset="utf-8">
+    <title>ETS Benchmark Result Viewer</title>
+  </head>
+
+  <body>
+    <div id="insertPlaceholder"></div>
+    <h1>ETS Benchmark Result Viewer</h1>
+    <p>
+      This page generates graphs from data produced by the ETS benchmark which is defined in the function <code>ets_SUITE:throughput_benchmark/0</code> (see "<code>$ERL_TOP/lib/stdlib/test/ets_SUITE.erl</code>").
+    </p>
+    <p>
+      Note that one can paste results from several benchmark runs into the field below. Results from the same scenario but from different benchmark runs will be relabeled and ploted in the same graph automatically. This makes comparisons of different ETS versions easy. 
+    </p>
+    <p>
+      Note also that that lines can be hidden by clicking on the corresponding label.
+    </p>
+    Paste the generated data in the field below and press the Render button:
+    <br>
+    <textarea id="dataField" rows="4" cols="50"># Each instance of the benchmark runs for 9.0 seconds:
+# The result of a benchmark instance is presented as a number representing
+# the number of operations performed per second:
+
+
+# To plot graphs for the results below:
+# 1. Open "$ERL_TOP/lib/stdlib/test/ets_SUITE_data/visualize_throughput.html" in a web browser
+# 2. Copy the lines between "#BENCHMARK STARTED$" and "#BENCHMARK ENDED$" below
+# 3. Paste the lines copied in step 2 to the text box in the browser window opened in
+#    step 1 and press the Render button
+
+#BENCHMARK STARTED$
+Scenario:  50.000000% insert,  50.000000% delete | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1267591.777778; 1996936.333333; 3474397.555556; 6376544.444444; 12029432.444444; 16796784.777778; 12342561.888889$
+Scenario:  10.000000% insert,  10.000000% delete,  80.000000% lookup | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1247344.222222; 2055571.222222; 3727647.333333; 6729302.111111; 12911040.666667; 18718613.666667; 23279541.888889$
+Scenario:  1.000000% insert,  1.000000% delete,  98.000000% lookup | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1341766.666667; 2423839.111111; 4477086.444444; 8078751.666667; 15893099.888889; 27816843.333333; 33632738.444444$
+Scenario:  100.000000% lookup | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1397623.111111; 2676692.777778; 5036996.000000; 9107123.666667; 18582160.666667; 33947848.666667; 37764952.888889$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq10 | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 590602.000000; 994335.888889; 1778629.000000; 3124995.444444; 5777480.444444; 8648889.222222; 10936059.666667$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq1000 | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 13551.888889; 26396.333333; 48336.777778; 82233.111111; 156693.111111; 301039.111111; 318445.000000$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% selectAll | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 988082.222222; 1528578.777778; 2681809.888889; 4567649.888889; 8382078.666667; 10985786.222222; 13004099.666667$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% partial_select1000 | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 887441.444444; 1382102.111111; 2452787.111111; 4276133.000000; 7864519.777778; 10566502.222222; 12878673.111111$
+Scenario:  50.000000% insert,  50.000000% delete | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1131336.888889; 1936158.777778; 3455519.666667; 6190944.444444; 11861297.222222; 18864255.888889; 25635108.000000$
+Scenario:  10.000000% insert,  10.000000% delete,  80.000000% lookup | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1127655.666667; 1881065.222222; 3480553.555556; 6305168.666667; 12361061.333333; 20107037.333333; 27032926.555556$
+Scenario:  1.000000% insert,  1.000000% delete,  98.000000% lookup | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1200274.000000; 2240008.222222; 4103768.888889; 7398566.555556; 14283235.888889; 26427167.444444; 32525754.777778$
+Scenario:  100.000000% lookup | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1268768.222222; 2470728.000000; 4730462.222222; 8606305.444444; 17068977.777778; 33550597.666667; 38291532.111111$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq10 | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 518357.555556; 948792.444444; 1720423.444444; 2983368.111111; 5670997.000000; 9576821.000000; 12967420.888889$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq1000 | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 10669.333333; 20400.000000; 38148.444444; 68043.333333; 125105.888889; 225293.111111; 283822.111111$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% selectAll | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 277507.333333; 466587.888889; 774004.555556; 1270013.111111; 2275654.111111; 3732693.666667; 4709585.222222$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% partial_select1000 | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 225608.444444; 404223.222222; 685172.888889; 1116820.222222; 2049023.888889; 3434309.111111; 4152578.222222$
+Scenario:  50.000000% insert,  50.000000% delete | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 656464.777778; 1370622.222222; 2567266.111111; 4448358.888889; 8767287.222222; 14483243.888889; 20387299.333333$
+Scenario:  10.000000% insert,  10.000000% delete,  80.000000% lookup | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 793329.555556; 1314944.666667; 2481826.888889; 4669290.666667; 8793836.333333; 15208238.444444; 21753775.222222$
+Scenario:  1.000000% insert,  1.000000% delete,  98.000000% lookup | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 832500.444444; 1579141.777778; 2884424.777778; 5193622.666667; 9834309.444444; 18396114.777778; 25725373.222222$
+Scenario:  100.000000% lookup | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 866985.777778; 1733406.555556; 3312610.888889; 6179863.666667; 11818525.333333; 24161435.666667; 31440103.888889$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq10 | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 363067.777778; 723319.444444; 1301750.444444; 2372950.333333; 4778844.444444; 8307856.444444; 11756462.444444$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq1000 | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 9055.222222; 17408.777778; 32296.333333; 59977.777778; 116276.555556; 232528.111111; 296325.000000$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% selectAll | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 2539.333333; 5622.000000; 10620.888889; 19126.888889; 40084.888889; 82104.444444; 100967.444444$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% partial_select1000 | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 2205.444444; 5072.666667; 8685.444444; 16420.555556; 33986.444444; 66255.666667; 81110.222222$
+
+#BENCHMARK ENDED$
+
+</textarea> 
+    <br>
+    <input type="checkbox" id="throughputPlot" checked> Include Throughput Plot
+    <br>
+    <input type="checkbox" id="betterThanWorstPlot"> Include % More Throughput Than Worst Plot
+    <br>
+    <input type="checkbox" id="worseThanBestPlot"> Include % Less Throughput Than Best Plot
+    <br>
+    <input type="checkbox" id="barPlot"> Bar Plot
+    <br>
+    <input type="checkbox" id="sameSpacing" checked> Same X Spacing Between Points
+    <br>
+    <input type="checkbox" class="showCheck" value="[ordered_set,public]" checked> Show <code>[ordered_set,public]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[ordered_set,public,{write_concurrency,true}]" checked> Show <code>[ordered_set,public,{write_concurrency,true}]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[ordered_set,public,{read_concurrency,true}]" checked> Show <code>[ordered_set,public,{read_concurrency,true}]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[ordered_set,public,{write_concurrency,true},{read_concurrency,true}]" checked> Show <code>[ordered_set,public,{write_concurrency,true},{read_concurrency,true}]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[set,public]" checked> Show <code>[set,public]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[set,public,{write_concurrency,true}]" checked> Show <code>[set,public,{write_concurrency,true}]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[set,public,{read_concurrency,true}]" checked> Show <code>[set,public,{read_concurrency,true}]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[set,public,{write_concurrency,true},{read_concurrency,true}]" checked> Show <code>[set,public,{write_concurrency,true},{read_concurrency,true}]</code>
+    <br>
+    <button id="renderButton" type="button">Render</button> 
+    
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+	    integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E="
+	    crossorigin="anonymous"></script>
+    <script>
+      var loading = false;
+      function toggleLoadingScreen(){
+          if(loading){
+              $("#loading").remove();
+              loading = false;
+          }else{
+              $('<div id="loading">'+
+                '<span style="position: fixed; top: 50%;left: 50%;color: white;"><b>Loading...</b></span>'+
+                '</div>')
+                  .css({position: "fixed",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: "100%",
+                        'background-color': "#000",
+                        filter:"alpha(opacity=50)",
+                        '-moz-opacity':"0.5",
+                        '-khtml-opacity': "0.5",
+                        opacity: "0.5",
+                        'z-index': "10000"})
+                  .appendTo(document.body);
+              loading = true;
+
+          }
+      }
+      //Start loading screen before downloading plotly which is quite large
+      toggleLoadingScreen();
+    </script>
+    <script src="https://cdn.plot.ly/plotly-1.5.0.min.js"></script>    
+    <script>
+      String.prototype.replaceAll = function(search, replacement) {
+          var target = this;
+          return target.split(search).join(replacement);
+      };
+      String.prototype.myTrim = function() {
+          var target = this;
+          return target.replace(/^\s+|\s+$/g, '');
+      };
+      function plotGraph(lines, sameSpacing, barPlot, prefix) {
+          var xvals = null;
+          var data = [];
+          while(lines.length > 0 &&
+                (lines[0].myTrim() == "" ||
+                 lines[0].myTrim().indexOf(";") !== -1)){
+              var line = lines.shift().myTrim();
+              if(line == "" || line.startsWith("#")){
+                  continue;
+              } else if(line.startsWith(";")) {
+                  xvals = line.split(";")
+                  xvals.shift(); // Remove first
+                  xvals = $.map(xvals, function (i){
+                      if(sameSpacing){
+                          return "_"+i.myTrim();
+                      }else{
+                          return parseInt(i.myTrim(), 10);
+                      }
+                  });
+              }else{
+                  line = line.split(";")
+                  var label = prefix + line.shift().myTrim();
+                  var yvals = $.map(line, function (i){
+                      return parseFloat(i.myTrim(), 10);
+                  });
+                  var trace = {
+                      x: xvals,
+                      y: yvals,
+                      mode: 'lines+markers',
+                      name: label
+                  };
+                  if(barPlot){
+                      trace['type'] = "bar";
+                  }
+                  data.push(trace);
+              }
+              
+          }
+          return data;
+      }
+      function toCompareData(dataParam, compareWithWorst) {
+          var data = $.extend(true, [], dataParam);
+          var worstSoFarMap = {};
+          var defaultSoFarValue = compareWithWorst ? Number.MAX_VALUE : Number.MIN_VALUE;
+          function getWorstBestSoFar(x){
+              return worstSoFarMap[x] === undefined ? defaultSoFarValue : worstSoFarMap[x];
+          }
+          function setWorstBestSoFar(x, y){
+              return worstSoFarMap[x] = y;
+          }
+          function lessOrGreaterThan(n1, n2){
+            return compareWithWorst ? n1 < n2 : n1 > n2;
+          } 
+          $.each(data, function(i, allResConfig) {
+            $.each(allResConfig.y, function(index, res) {
+                var xName = allResConfig.x[index];
+                if(lessOrGreaterThan(res, getWorstBestSoFar(xName))){
+                    setWorstBestSoFar(xName, res);                     
+                }
+            });
+          });
+          $.each(data, function(i, allResConfig) {
+            $.each(allResConfig.y, function(index, res) {
+                var xName = allResConfig.x[index];
+                if(compareWithWorst){
+                    allResConfig.y[index] = ((res / getWorstBestSoFar(xName))-1.0) * 100;
+                }else{
+                    allResConfig.y[index] = (1.0 -(res / getWorstBestSoFar(xName))) * 100;
+                }
+            });
+          });
+          return data;
+      }
+      function toBetterThanWorstData(data){
+        return toCompareData(data, true);
+      }
+      function toWorseThanBestData(data){
+        return toCompareData(data, false);
+      }
+      function plotGraphs(){
+          var insertPlaceholder = $("#insertPlaceholder");
+          var sameSpacing = $('#sameSpacing').is(":checked");
+          var barPlot = $('#barPlot').is(":checked");
+          var throughputPlot = $('#throughputPlot').is(":checked");
+          var betterThanWorstPlot = $('#betterThanWorstPlot').is(":checked");
+          var worseThanBestPlot = $('#worseThanBestPlot').is(":checked");
+          var lines = $("#dataField").val();
+          $('.showCheck').each(function() {
+              var item = $(this);
+              if(!item.is(":checked")){
+                  lines = lines.replaceAll(item.val(), "#"+item.val())
+              }
+          });
+          lines = lines.split("$");
+          var nrOfGraphs = 0;
+          var scenarioDataMap = {};
+          var scenarioNrOfVersionsMap = {};
+          var scenarioList = [];
+          while(lines.length > 0){
+              var line = lines.shift().myTrim();
+              if(line == ""){
+                  continue;
+              } else if(line.startsWith("Scenario:")) {
+                  nrOfGraphs = nrOfGraphs + 1;
+                  var name = line;
+                  if(scenarioDataMap[name] === undefined){
+                      scenarioDataMap[name] = [];
+                      scenarioNrOfVersionsMap[name] = 0;
+                      scenarioList.push(line);
+                  }
+                  scenarioNrOfVersionsMap[name] = scenarioNrOfVersionsMap[name] + 1;
+                  var prefix = undefined;
+                  if(scenarioNrOfVersionsMap[name] === 1){
+                      prefix = "";
+                  }else{
+                      prefix = "Ver: " + scenarioNrOfVersionsMap[name] + " ";
+                  }
+                  scenarioDataMap[name] =
+                      scenarioDataMap[name].concat(
+                          plotGraph(lines, sameSpacing, barPlot, prefix));
+              }
+          }
+          var nrOfGraphs = 0;
+          function plotScenario(name, plotType) {
+              var data = scenarioDataMap[name];
+              var yAxisTitle = undefined;
+              nrOfGraphs = nrOfGraphs + 1;
+              $("<div class='added' id='graph" + nrOfGraphs + "'>")
+                  .insertBefore(insertPlaceholder);
+              $("<button type='button' class='added' id='fullscreenButton" + nrOfGraphs + "'>Fill screen</button>")
+                  .insertBefore(insertPlaceholder);
+              $("<span class='added'><br><hr><br></span>")
+                  .insertBefore(insertPlaceholder);
+              if (plotType === 'throughput') {
+                  yAxisTitle = 'Operations/Second';
+              } else if (plotType === 'better_than_worst') {
+                  yAxisTitle = '% More Throughput Than Worst';
+                  data = toBetterThanWorstData(data);
+              } else {
+                  yAxisTitle = '% Less Throughput Than Best';
+                  data = toWorseThanBestData(data);
+              }
+              var layout = {
+                  title: name,
+                  xaxis: {
+                      title: '# of Processes'
+                  },
+                  yaxis: {
+                      title: yAxisTitle
+                  }
+              };
+              $("#fullscreenButton" + nrOfGraphs).click(
+                  function () {
+                      $('#graph' + nrOfGraphs).replaceWith(
+                          $("<div class='added' id='graph" + nrOfGraphs + "'>"));
+                      layout = $.extend({}, layout, {
+                          width: $(window).width() - 40,
+                          height: $(window).height() - 40
+                      });
+                      Plotly.newPlot('graph' + nrOfGraphs, data, layout);
+                  });
+              Plotly.newPlot('graph' + nrOfGraphs, data, layout);
+          }
+          $.each(scenarioList,
+              function (index, name) {
+                  if (throughputPlot) {
+                      plotScenario(name, 'throughput');
+                  }
+                  if (betterThanWorstPlot) {
+                      plotScenario(name, 'better_than_worst');
+                  }
+                  if (worseThanBestPlot) {
+                      plotScenario(name, 'worse_than_best');
+                  }
+              });
+      }
+    $(document).ready(function(){
+        $('#renderButton').click(
+            function(){
+                toggleLoadingScreen();
+                setTimeout(function(){
+                    try {                       
+                        $( ".added" ).remove();
+                        plotGraphs();
+                        toggleLoadingScreen();
+                    } catch(e){
+                        toggleLoadingScreen();
+                        console.log(e);
+                        alert("Error happened when parsing data.\n" +
+                              "See console for more info");
+                    }
+                }, 10);
+            });
+        setTimeout(function(){
+            $( ".added" ).remove();
+            plotGraphs();
+            toggleLoadingScreen();
+        }, 10);
+    });
+  </script>
+  </body>
+</html>
