@@ -219,14 +219,14 @@ DbTableMethod db_catree =
  * Constants
  */
 
-#define ERL_DB_CATREE_LOCK_FAILURE_CONTRIBUTION 310
+#define ERL_DB_CATREE_LOCK_FAILURE_CONTRIBUTION 250
 #define ERL_DB_CATREE_LOCK_SUCCESS_CONTRIBUTION (-1)
-#define ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION (-900)
-#define ERL_DB_CATREE_LOCK_GRAVITY_PATTERN (0xFFFC0000)
+#define ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION (-250)
+#define ERL_DB_CATREE_LOCK_GRAVITY_PATTERN (0xFFF00000)
 #define ERL_DB_CATREE_LOCK_MORE_THAN_ONE_CONTRIBUTION (-10)
 #define ERL_DB_CATREE_HIGH_CONTENTION_LIMIT 1000
 #define ERL_DB_CATREE_LOW_CONTENTION_LIMIT (-1000)
-#define ERL_DB_CATREE_MAX_ROUTE_NODE_LAYER_HEIGHT 16
+#define ERL_DB_CATREE_MAX_ROUTE_NODE_LAYER_HEIGHT 14
 
 /*
  * Internal CA tree related helper functions and macros
@@ -255,6 +255,16 @@ DbTableMethod db_catree =
 #define SET_ROOT_RELB(tb, v) erts_atomic_set_relb(&((tb)->root), (erts_aint_t)(v))
 #define SET_LEFT_RELB(ca_tree_route_node, v) erts_atomic_set_relb(&(ca_tree_route_node->u.route.left), (erts_aint_t)(v));
 #define SET_RIGHT_RELB(ca_tree_route_node, v) erts_atomic_set_relb(&(ca_tree_route_node->u.route.right), (erts_aint_t)(v));
+
+/* Change base node lock statistics */
+#define BASE_NODE_STAT_SET(NODE, VALUE) erts_atomic_set_nob(&(NODE)->u.base.lock_statistics, VALUE)
+#define BASE_NODE_STAT_READ(NODE) erts_atomic_read_nob(&(NODE)->u.base.lock_statistics)
+#define BASE_NODE_STAT_ADD(NODE, VALUE)                                 \
+    do {                                                                \
+        Sint v = erts_atomic_read_nob(&((NODE)->u.base.lock_statistics)); \
+        erts_atomic_set_nob(&(NODE->u.base.lock_statistics), v + VALUE); \
+    }while(0);
+
 
 /* Compares a key to the key in a route node */
 static ERTS_INLINE Sint cmp_key_route(Eterm key,
@@ -681,6 +691,7 @@ void do_random_join(DbTableCATree* tb, Uint rand)
     DbTableCATreeNode* node = GET_ROOT_ACQB(tb);
     DbTableCATreeNode* parent = NULL;
     int level = 0;
+    Sint newStat;
     while (!node->is_base_node) {
         parent = node;
         if ((rand & (1 << level)) == 0) {
@@ -690,12 +701,23 @@ void do_random_join(DbTableCATree* tb, Uint rand)
         }
         level++;
     }
+    {
+        Sint stat = BASE_NODE_STAT_READ(node);
+        if (stat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT){
+            newStat = stat + ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION;
+            BASE_NODE_STAT_SET(node, newStat);
+        } else {
+            newStat = stat;
+        }
+        if (newStat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT) {
+            return; /* No adaptation */
+        }
+    }
     if (parent != NULL && !try_wlock_base_node(&node->u.base)) {
         if (!node->u.base.is_valid) {
             wunlock_base_node(node);
             return;
         }
-        node->u.base.lock_statistics += ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION;
         wunlock_adapt_base_node(tb, node, parent, level);
     }
 }
@@ -738,9 +760,9 @@ void wlock_base_node(DbTableCATreeNode *base_node)
     if (try_wlock_base_node(&base_node->u.base)) {
         /* The lock is contended */
         wlock_base_node_no_stats(base_node);
-        base_node->u.base.lock_statistics += ERL_DB_CATREE_LOCK_FAILURE_CONTRIBUTION;
+        BASE_NODE_STAT_ADD(base_node, ERL_DB_CATREE_LOCK_FAILURE_CONTRIBUTION);
     } else {
-        base_node->u.base.lock_statistics += ERL_DB_CATREE_LOCK_SUCCESS_CONTRIBUTION;
+        BASE_NODE_STAT_ADD(base_node, ERL_DB_CATREE_LOCK_SUCCESS_CONTRIBUTION);
     }
 }
 
@@ -756,13 +778,14 @@ void wunlock_adapt_base_node(DbTableCATree* tb,
                              DbTableCATreeNode* parent,
                              int current_level)
 {
+    Sint base_node_lock_stat = BASE_NODE_STAT_READ(node);
     dbg_provoke_random_splitjoin(tb,node);
     if ((!node->u.base.root && parent && !(tb->common.status
                                            & DB_CATREE_FORCE_SPLIT))
-        || node->u.base.lock_statistics < ERL_DB_CATREE_LOW_CONTENTION_LIMIT) {
+        || base_node_lock_stat < ERL_DB_CATREE_LOW_CONTENTION_LIMIT) {
         join_catree(tb, node, parent);
     }
-    else if (node->u.base.lock_statistics > ERL_DB_CATREE_HIGH_CONTENTION_LIMIT
+    else if (base_node_lock_stat > ERL_DB_CATREE_HIGH_CONTENTION_LIMIT
         && current_level < ERL_DB_CATREE_MAX_ROUTE_NODE_LAYER_HEIGHT) {
         split_catree(tb, node, parent);
     }
@@ -775,7 +798,11 @@ static ERTS_INLINE
 void rlock_base_node(DbTableCATreeNode *base_node)
 {
     ASSERT(base_node->is_base_node);
-    erts_rwmtx_rlock(&base_node->u.base.lock);
+    if (EBUSY == erts_rwmtx_tryrlock(&base_node->u.base.lock)) {
+        /* The lock is contended */
+        BASE_NODE_STAT_ADD(base_node, ERL_DB_CATREE_LOCK_FAILURE_CONTRIBUTION);
+        erts_rwmtx_rlock(&base_node->u.base.lock);
+    }
 }
 
 static ERTS_INLINE
@@ -978,8 +1005,8 @@ static DbTableCATreeNode *create_base_node(DbTableCATree *tb,
                         "erl_db_catree_base_node",
                         NIL,
                         ERTS_LOCK_FLAGS_CATEGORY_DB);
-    p->u.base.lock_statistics = ((tb->common.status & DB_CATREE_FORCE_SPLIT)
-                                 ? INT_MAX : 0);
+    BASE_NODE_STAT_SET(p, ((tb->common.status & DB_CATREE_FORCE_SPLIT)
+                           ? INT_MAX : 0));
     p->u.base.is_valid = 1;
     return p;
 }
@@ -1149,7 +1176,7 @@ static void join_catree(DbTableCATree *tb,
 
     ASSERT(thiz->is_base_node);
     if (parent == NULL) {
-        thiz->u.base.lock_statistics = 0;
+        BASE_NODE_STAT_SET(thiz, 0);
         wunlock_base_node(thiz);
         return;
     }
@@ -1158,11 +1185,11 @@ static void join_catree(DbTableCATree *tb,
         neighbor = leftmost_base_node(GET_RIGHT_ACQB(parent));
         if (try_wlock_base_node(&neighbor->u.base)) {
             /* Failed to acquire lock */
-            thiz->u.base.lock_statistics = 0;
+            BASE_NODE_STAT_SET(thiz, 0);
             wunlock_base_node(thiz);
             return;
         } else if (!neighbor->u.base.is_valid) {
-            thiz->u.base.lock_statistics = 0;
+            BASE_NODE_STAT_SET(thiz, 0);
             wunlock_base_node(thiz);
             wunlock_base_node(neighbor);
             return;
@@ -1208,11 +1235,11 @@ static void join_catree(DbTableCATree *tb,
         neighbor = rightmost_base_node(GET_LEFT_ACQB(parent));
         if (try_wlock_base_node(&neighbor->u.base)) {
             /* Failed to acquire lock */
-            thiz->u.base.lock_statistics = 0;
+            BASE_NODE_STAT_SET(thiz, 0);
             wunlock_base_node(thiz);
             return;
         } else if (!neighbor->u.base.is_valid) {
-            thiz->u.base.lock_statistics = 0;
+            BASE_NODE_STAT_SET(thiz, 0);
             wunlock_base_node(thiz);
             wunlock_base_node(neighbor);
             return;
@@ -1296,7 +1323,7 @@ static void split_catree(DbTableCATree *tb,
 
     if (less_than_two_elements(base->u.base.root)) {
         if (!(tb->common.status & DB_CATREE_FORCE_SPLIT))
-            base->u.base.lock_statistics = 0;
+            BASE_NODE_STAT_SET(base, 0);
         wunlock_base_node(base);
         return;
     } else {
@@ -2305,7 +2332,7 @@ void db_catree_force_split(DbTableCATree* tb, int on)
     init_root_iterator(tb, &iter, 1);
     root = catree_find_first_root(&iter);
     do {
-        iter.locked_bnode->u.base.lock_statistics = (on ? INT_MAX : 0);
+        BASE_NODE_STAT_SET(iter.locked_bnode, (on ? INT_MAX : 0));
         root = catree_find_next_root(&iter, NULL);
     } while (root);
     destroy_root_iterator(&iter);
