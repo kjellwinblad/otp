@@ -42,7 +42,7 @@
     </p>
     Paste the generated data in the field below and press the Render button:
     <br>
-    <textarea id="dataField" rows="4" cols="50"># Each instance of the benchmark runs for 180.0 seconds:
+    <textarea id="dataField" rows="4" cols="50"># Each instance of the benchmark runs for 9.0 seconds:
 # The result of a benchmark instance is presented as a number representing
 # the number of operations performed per second:
 
@@ -54,10 +54,78 @@
 #    step 1 and press the Render button
 
 #BENCHMARK STARTED$
+Scenario:  50.000000% insert,  50.000000% delete | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1269718.333333; 1823204.666667; 3232756.555556; 6302960.111111; 11814033.111111; 16463107.000000; 11760884.666667$
+Scenario:  10.000000% insert,  10.000000% delete,  80.000000% lookup | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1165914.222222; 1832666.888889; 3759184.444444; 6700810.666667; 13028178.111111; 18949715.444444; 23255165.444444$
+Scenario:  1.000000% insert,  1.000000% delete,  98.000000% lookup | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1294238.000000; 2158312.888889; 3997264.777778; 7390196.333333; 15316701.333333; 27429806.222222; 33119036.222222$
+Scenario:  100.000000% lookup | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1412959.888889; 2342508.555556; 4474376.222222; 8401472.000000; 17010814.888889; 32756698.111111; 36391936.111111$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq10 | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 581146.333333; 974284.777778; 1754084.666667; 3064914.666667; 5674656.777778; 8488067.333333; 10884123.333333$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq1000 | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 12899.555556; 24080.888889; 45541.777778; 85212.333333; 174103.777778; 302198.222222; 349042.444444$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% selectAll | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 959440.666667; 1498354.111111; 2651027.555556; 4539956.888889; 8171802.000000; 11101567.777778; 13148423.111111$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% partial_select1000 | Key Range Size: 1000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 840606.555556; 1305530.888889; 2451328.111111; 4227487.888889; 7725725.666667; 10521806.888889; 12283986.000000$
+Scenario:  50.000000% insert,  50.000000% delete | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1008437.555556; 1820169.222222; 3287898.333333; 6117471.555556; 11780369.000000; 18763095.111111; 25229858.666667$
+Scenario:  10.000000% insert,  10.000000% delete,  80.000000% lookup | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1093891.000000; 1827016.000000; 3440641.000000; 6323400.666667; 12225212.777778; 19820053.777778; 26851688.666667$
+Scenario:  1.000000% insert,  1.000000% delete,  98.000000% lookup | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1189704.333333; 2047581.000000; 4022706.444444; 7034011.777778; 14244314.333333; 26495467.444444; 31692739.000000$
+Scenario:  100.000000% lookup | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 1266552.777778; 2218874.888889; 4122433.444444; 8588977.888889; 17080816.222222; 33281600.666667; 37641044.111111$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq10 | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 483479.333333; 917244.444444; 1671596.777778; 2967113.888889; 5931722.444444; 9701760.222222; 12782218.555556$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq1000 | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 10216.111111; 19453.333333; 36053.555556; 64966.222222; 125204.222222; 230250.111111; 308918.777778$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% selectAll | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 274450.222222; 496247.777778; 896987.111111; 1573959.888889; 2916437.333333; 4635423.777778; 5549735.000000$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% partial_select1000 | Key Range Size: 10000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 215971.666667; 409154.555556; 743354.111111; 1300491.000000; 2444909.888889; 4067575.555556; 4741394.777778$
+Scenario:  50.000000% insert,  50.000000% delete | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 862733.000000; 1319193.000000; 2457420.222222; 5065064.222222; 8667436.555556; 14399708.000000; 20756565.777778$
+Scenario:  10.000000% insert,  10.000000% delete,  80.000000% lookup | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 823718.222222; 1320127.888889; 2421093.111111; 4457702.222222; 8695244.000000; 15172166.111111; 21797675.444444$
+Scenario:  1.000000% insert,  1.000000% delete,  98.000000% lookup | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 859505.666667; 1520036.777778; 2853258.444444; 5252824.333333; 10747829.000000; 18828275.666667; 26054589.222222$
 Scenario:  100.000000% lookup | Key Range Size: 1000000$
-; 1; 32; 64$
-seq_init,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 967078.266667; 26152890.672222; 31428171.161111$
-par_init,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 779284.894444; 22291467.511111; 30094277.694444$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 912812.111111; 1606262.888889; 3157644.222222; 6049887.888889; 12717346.222222; 23528413.444444; 31292645.333333$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq10 | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 411738.222222; 664084.555556; 1242964.111111; 2455100.111111; 4709044.444444; 8310096.666667; 11782066.888889$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq1000 | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 8787.666667; 15708.666667; 29717.000000; 54426.888889; 108112.333333; 209785.666667; 280729.111111$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% selectAll | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 2428.555556; 5101.555556; 9421.444444; 20662.111111; 38020.444444; 82544.666667; 96992.555556$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% partial_select1000 | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 64$
+,[ordered_set,public,{write_concurrency,true},{read_concurrency,true}] ; 2135.333333; 4275.888889; 8601.000000; 15459.222222; 31806.333333; 66699.444444; 80482.222222$
 
 #BENCHMARK ENDED$
 
