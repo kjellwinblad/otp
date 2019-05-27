@@ -16,3 +16,9 @@ Release:	18.04
 Codename:	bionic
 LINUX
 4.18.0-1018-azure
+Distributor ID:	Ubuntu
+Description:	Ubuntu 18.04.2 LTS
+Release:	18.04
+Codename:	bionic
+LINUX
+4.18.0-1018-azure
