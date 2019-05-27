@@ -221,8 +221,8 @@ DbTableMethod db_catree =
 
 #define ERL_DB_CATREE_LOCK_FAILURE_CONTRIBUTION 250
 #define ERL_DB_CATREE_LOCK_SUCCESS_CONTRIBUTION (-1)
-#define ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION (-250)
-#define ERL_DB_CATREE_LOCK_GRAVITY_PATTERN (0xFFF00000)
+#define ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION (-500)
+#define ERL_DB_CATREE_LOCK_GRAVITY_PATTERN (0xFF800000)
 #define ERL_DB_CATREE_LOCK_MORE_THAN_ONE_CONTRIBUTION (-10)
 #define ERL_DB_CATREE_HIGH_CONTENTION_LIMIT 1000
 #define ERL_DB_CATREE_LOW_CONTENTION_LIMIT (-1000)
@@ -706,6 +706,7 @@ void do_random_join(DbTableCATree* tb, Uint rand)
         if (stat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT &&
             stat <= ERL_DB_CATREE_HIGH_CONTENTION_LIMIT){
             newStat = stat + ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION;
+            //printf("HERE %ld %p\n",newStat, parent);
             BASE_NODE_STAT_SET(node, newStat);
             if (newStat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT) {
                 return; /* No adaptation */
@@ -717,6 +718,7 @@ void do_random_join(DbTableCATree* tb, Uint rand)
             wunlock_base_node(node);
             return;
         }
+        //printf("JOIN %d\n", level);
         wunlock_adapt_base_node(tb, node, parent, level);
     }
 }
