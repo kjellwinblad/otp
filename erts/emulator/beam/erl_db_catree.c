@@ -703,15 +703,16 @@ void do_random_join(DbTableCATree* tb, Uint rand)
     }
     {
         Sint stat = BASE_NODE_STAT_READ(node);
-        if (stat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT &&
-            stat <= ERL_DB_CATREE_HIGH_CONTENTION_LIMIT){
+        /* if (stat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT && */
+        /*     stat <= ERL_DB_CATREE_HIGH_CONTENTION_LIMIT){ */
             newStat = stat + ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION;
             //printf("HERE %ld %p\n",newStat, parent);
             BASE_NODE_STAT_SET(node, newStat);
-            if (newStat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT) {
+            if (newStat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT
+                && stat <= ERL_DB_CATREE_HIGH_CONTENTION_LIMIT) {
                 return; /* No adaptation */
             }
-        }
+        /* } */
     }
     if (parent != NULL && !try_wlock_base_node(&node->u.base)) {
         if (!node->u.base.is_valid) {
