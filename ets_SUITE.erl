@@ -7372,13 +7372,13 @@ lookup_catree_par_vs_seq_init_benchmark() ->
     N = erlang:system_info(schedulers),
     throughput_benchmark(
       #ets_throughput_bench_config{
-         benchmark_duration_ms = 30000,
+         benchmark_duration_ms = 60000,
          recover_time_ms = 5000,
          thread_counts = [1, N div 2, N],
          key_ranges = [1000000],
          init_functions = [{"seq_init", fun prefill_table/4},
                            {"par_init", fun prefill_table_parallel/4}],
-         nr_of_repeats = 3,
+         nr_of_repeats = 1,
          scenarios =
              [
               [
