@@ -7315,14 +7315,22 @@ long_throughput_benchmark(Config) when is_list(Config) ->
              end
         }).
 
+%% This function compares the lookup operation's performance for
+%% ordered_set ETS tables with and without write_concurrency enabled
+%% when the data structures have been populated in parallel and
+%% sequentially.
+%%
+%% The main purpose of this function is to check that the
+%% implementation of ordered_set with write_concurrency (CA tree)
+%% adapts its structure to contention even when only lookup operations
+%% are used.
 lookup_catree_par_vs_seq_init_benchmark() ->
     N = erlang:system_info(schedulers),
     throughput_benchmark(
       #ets_throughput_bench_config{
-         benchmark_duration_ms = 60000,
+         benchmark_duration_ms = 600000,
          recover_time_ms = 1000,
-         thread_counts = [1%% , N div 2, N
-                         ],
+         thread_counts = [1, N div 2, N],
          key_ranges = [1000000],
          init_functions = [{"seq_init", fun prefill_table/4},
                            {"par_init", fun prefill_table_parallel/4}],
@@ -7335,7 +7343,8 @@ lookup_catree_par_vs_seq_init_benchmark() ->
              ],
          table_types =
              [
-              [ordered_set, public, {write_concurrency, true}]%, {read_concurrency, true}
+              [ordered_set, public, {write_concurrency, true}],
+              [ordered_set, public]
              ],
           print_result_paths_fun = fun stdout_notify_res/2
         }).
