@@ -687,10 +687,10 @@ static void dbg_provoke_random_splitjoin(DbTableCATree* tb,
 
     switch (dbg_fastrand() % 8) {
     case 1:
-        base_node->u.base.lock_statistics = 1+ERL_DB_CATREE_HIGH_CONTENTION_LIMIT;
+        BASE_NODE_STAT_ADD(base_node, 1+ERL_DB_CATREE_HIGH_CONTENTION_LIMIT);
         break;
     case 2:
-        base_node->u.base.lock_statistics = -1+ERL_DB_CATREE_LOW_CONTENTION_LIMIT;
+        BASE_NODE_STAT_SUB(base_node, -1+ERL_DB_CATREE_LOW_CONTENTION_LIMIT);
         break;
     }
 }
