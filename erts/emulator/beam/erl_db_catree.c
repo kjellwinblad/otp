@@ -227,6 +227,8 @@ DbTableMethod db_catree =
 #define ERL_DB_CATREE_HIGH_CONTENTION_LIMIT 1000
 #define ERL_DB_CATREE_LOW_CONTENTION_LIMIT (-1000)
 #define ERL_DB_CATREE_MAX_ROUTE_NODE_LAYER_HEIGHT 16
+#define ERL_DB_CATREE_LOCK_LOW_NO_CONTRIBUTION_LIMIT (-20000)
+#define ERL_DB_CATREE_LOCK_HIGH_NO_CONTRIBUTION_LIMIT (20000)
 
 /*
  * Internal CA tree related helper functions and macros
@@ -262,7 +264,18 @@ DbTableMethod db_catree =
 #define BASE_NODE_STAT_ADD(NODE, VALUE)                                 \
     do {                                                                \
         Sint v = erts_atomic_read_nob(&((NODE)->u.base.lock_statistics)); \
-        erts_atomic_set_nob(&(NODE->u.base.lock_statistics), v + VALUE); \
+        ASSERT(VALUE > 0);                                              \
+        if(v < ERL_DB_CATREE_LOCK_HIGH_NO_CONTRIBUTION_LIMIT) {          \
+            erts_atomic_set_nob(&(NODE->u.base.lock_statistics), v + VALUE); \
+        }                                                               \
+    }while(0);
+#define BASE_NODE_STAT_SUB(NODE, VALUE)                                 \
+    do {                                                                \
+        Sint v = erts_atomic_read_nob(&((NODE)->u.base.lock_statistics)); \
+        ASSERT(VALUE < 0);                                              \
+        if(v > ERL_DB_CATREE_LOCK_LOW_NO_CONTRIBUTION_LIMIT) {          \
+            erts_atomic_set_nob(&(NODE->u.base.lock_statistics), v + VALUE); \
+        }                                                               \
     }while(0);
 
 
@@ -691,7 +704,7 @@ void do_random_join(DbTableCATree* tb, Uint rand)
     DbTableCATreeNode* node = GET_ROOT_ACQB(tb);
     DbTableCATreeNode* parent = NULL;
     int level = 0;
-    Sint newStat;
+    Sint stat;
     while (!node->is_base_node) {
         parent = node;
         if ((rand & (1 << level)) == 0) {
@@ -701,25 +714,17 @@ void do_random_join(DbTableCATree* tb, Uint rand)
         }
         level++;
     }
-    {
-        Sint stat = BASE_NODE_STAT_READ(node);
-        /* if (stat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT && */
-        /*     stat <= ERL_DB_CATREE_HIGH_CONTENTION_LIMIT){ */
-            newStat = stat + ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION;
-            //printf("HERE %ld %p\n",newStat, parent);
-            BASE_NODE_STAT_SET(node, newStat);
-            if (newStat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT
-                && stat <= ERL_DB_CATREE_HIGH_CONTENTION_LIMIT) {
-                return; /* No adaptation */
-            }
-        /* } */
+    BASE_NODE_STAT_SUB(node, ERL_DB_CATREE_LOCK_GRAVITY_CONTRIBUTION);
+    stat = BASE_NODE_STAT_READ(node);
+    if (stat >= ERL_DB_CATREE_LOW_CONTENTION_LIMIT &&
+        stat <= ERL_DB_CATREE_HIGH_CONTENTION_LIMIT) {
+        return; /* No adaptation */
     }
     if (parent != NULL && !try_wlock_base_node(&node->u.base)) {
         if (!node->u.base.is_valid) {
             wunlock_base_node(node);
             return;
         }
-        //printf("JOIN %d\n", level);
         wunlock_adapt_base_node(tb, node, parent, level);
     }
 }
@@ -764,7 +769,7 @@ void wlock_base_node(DbTableCATreeNode *base_node)
         wlock_base_node_no_stats(base_node);
         BASE_NODE_STAT_ADD(base_node, ERL_DB_CATREE_LOCK_FAILURE_CONTRIBUTION);
     } else {
-        BASE_NODE_STAT_ADD(base_node, ERL_DB_CATREE_LOCK_SUCCESS_CONTRIBUTION);
+        BASE_NODE_STAT_SUB(base_node, ERL_DB_CATREE_LOCK_SUCCESS_CONTRIBUTION);
     }
 }
 
