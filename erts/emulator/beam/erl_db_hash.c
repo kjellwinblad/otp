@@ -130,6 +130,7 @@
  */
 #define GROW_LIMIT(NACTIVE) ((NACTIVE)*1)
 #define SHRINK_LIMIT(NACTIVE) ((NACTIVE) / 2)
+#define ENABLE_DECENTRALIZED_CTRS_LIMIT_SHRINK 1
 
 /*
 ** We want the first mandatory segment to be small (to reduce minimal footprint)
@@ -522,14 +523,19 @@ db_finalize_dbterm_hash(int cret, DbUpdateHandle* handle);
 
 static ERTS_INLINE void try_shrink(DbTableHash* tb, Sint nitems)
 {
-    Uint32 rand = erts_sched_local_random((Sint)&tb);
-    //   if (((rand & 15)) == 0) {
-        int nactive = NACTIVE(tb);
-        if (nactive > FIRST_SEGSZ && nitems < SHRINK_LIMIT(nactive)
-            && !IS_FIXED(tb)) {
-            shrink(tb, nitems);
+    int nactive = NACTIVE(tb);
+#ifdef ENABLE_DECENTRALIZED_CTRS_LIMIT_SHRINK
+    if (IS_DECENTRALIZED_CTRS(tb) && (nactive / DB_HASH_LOCK_CNT) < 128) {
+        Uint32 rand = erts_sched_local_random((Sint)&tb);
+        if ((rand & 63) != 0) {
+            return;
         }
-        //}
+    }
+#endif
+    if (nactive > FIRST_SEGSZ && nitems < SHRINK_LIMIT(nactive)
+        && !IS_FIXED(tb)) {
+        shrink(tb, nitems);
+    }
 }
 
 /* Is this a live object (not pseodo-deleted) with the specified key? 
