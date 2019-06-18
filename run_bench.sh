@@ -22,26 +22,27 @@ echo LINUX >> ets_SUITE_data/os_info
 uname -r >> ets_SUITE_data/os_info
 
 
-git checkout OTP-21.3.8.3
+#git checkout OTP-21.3.8.3
 
-source otp_env.source
+#source otp_env.source
 
-./otp_build autoconf
+#./otp_build autoconf
 
-./configure
+#./configure
 
-make
+#make
 
-source otp_env.source
+#source otp_env.source
 
-erlc ets_SUITE.erl
+#erlc ets_SUITE.erl
 
 # Same as db (fills one chip at a time)
-erl +sbt tnnps -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
+#erl +sbt tnnps -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
 
 
-git checkout kjell/bench/21_vs_22_ordered_set
+#git checkout kjell/bench/21_vs_22_ordered_set
 
+git clean -d -x -f
 
 source otp_env.source
 
