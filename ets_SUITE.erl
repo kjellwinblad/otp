@@ -6906,7 +6906,7 @@ stdout_notify_res(ResultPath, LatestResultPath) ->
 throughput_benchmark() ->
     throughput_benchmark(
       #ets_throughput_bench_config{
-         benchmark_duration_ms = 9000,
+         benchmark_duration_ms = 18000,
          recover_time_ms = 1000,
          thread_counts = [1,2,4,8,16,32,64],
          key_ranges = [1000000],
