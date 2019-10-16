@@ -2153,7 +2153,7 @@ patch to `Man-notify-when-ready'.")
            (setq modname name)))
     (when (or (null modname) (string= modname ""))
       (error "No Erlang module name given"))
-    (cond ((fboundp 'Man-notify-when-ready)
+    (cond (nil;(fboundp 'Man-notify-when-ready)
            ;; Emacs 19:  The man command could possibly start an
            ;; asynchronous process, i.e. we must hook ourselves into
            ;; the system to be activated when the man-process
@@ -2169,7 +2169,12 @@ patch to `Man-notify-when-ready'.")
           (t
            (erlang-man-module modname)
            (when funcname
-             (erlang-man-find-function (current-buffer) funcname))))))
+             (erlang-man-repeated-search-for-function (current-buffer)
+                                                      erlang-man-function-name))))))
+
+(require 'cl-lib)
+(cl-remove-if-not (lambda (buf) (format "%s" buf))  (buffer-list)) ;; (1 2)
+(member 3 (buffer-list))
 
 (defun erlang-man-function (&optional name)
   "Find manual page for NAME, where NAME is module:function.
@@ -2191,12 +2196,13 @@ This function is aware of imported functions."
   (setq name (or name
                  (erlang-default-function-or-module)))
   (erlang-man-function-display-man-page name)
-  (sleep-for 0 600)
-  ;; A hack to make sure that the function scrolls
-  ;; to the description of the function when it is
-  ;; the first time that the man page for a module
-  ;; is opened
-  (erlang-man-function-display-man-page name))
+  ;; (sleep-for 0 600)
+  ;; ;; A hack to make sure that the function scrolls
+  ;; ;; to the description of the function when it is
+  ;; ;; the first time that the man page for a module
+  ;; ;; is opened
+  ;; (erlang-man-function-display-man-page name)
+  )
 
 
 (defun erlang-man-function-no-prompt ()
@@ -2211,6 +2217,34 @@ opening the man page for the function."
         (erlang-man-function name)
       (error "No function name under the cursor"))))
 
+
+(let ((hej "hejsan"))
+  (eval '(progn
+           (message "hoopsan")
+           (message hej)) `((hej . ,hej))))
+
+(list (+ 1 2))
+
+(defun erlang-man-repeated-search-for-function (man-buffer function-name)
+  "The documentation"
+  (eval
+   '(let* ((time-between-attempts 0.5)
+           (max-wait-time 5.0)
+           (search-for-function
+            (lambda (self time-waited)
+              (when (and (not (erlang-man-find-function man-buffer function-name))
+                         (<= (+ time-waited time-between-attempts)
+                             max-wait-time))
+                (message "Finding function %s %f..." function-name time-waited)
+                (run-at-time time-between-attempts nil
+                             self
+                             self
+                             (+ time-waited time-between-attempts))
+                ))))
+      (funcall search-for-function search-for-function 0.0))
+   `((man-buffer . ,man-buffer)
+     (function-name . ,function-name))))
+
 ;; Should the defadvice be at the top level, the package `advice' would
 ;; be required.  Now it is only required when this functionality
 ;; is used.  (Emacs 19 specific.)
@@ -2221,6 +2255,7 @@ the function name, or to nil.
 
 The reason for patching a function is that under Emacs 19, the man
 command is executed asynchronously."
+  (message "HEJ2")
   (condition-case nil
       (require 'advice)
     ;; This should never happened since this is only called when
@@ -2233,8 +2268,8 @@ command is executed asynchronously."
     "Set point at the documentation of the function name in
 `erlang-man-function-name' when the man page is displayed."
     (if erlang-man-function-name
-        (erlang-man-find-function (ad-get-arg 0) erlang-man-function-name))
-    (setq erlang-man-function-name nil)))
+        (erlang-man-repeated-search-for-function (ad-get-arg 0) erlang-man-function-name)
+      (setq erlang-man-function-name nil))))
 
 
 (defun erlang-man-find-function (buf func)
@@ -2250,14 +2285,20 @@ command is executed asynchronously."
                    (point-max) t)
                   (progn
                     (forward-word -1)
-                    (set-window-point win (point)))
+                    (set-window-point win (point))
+                    (message "Found documentation for function `%s'" func)
+                    t)
                 (if (re-search-forward
                      (concat "^[ \t]*\\([a-z0-9_]*[ \t]*:\\)?[ \t]*" func "[ \t]*\(")
                      (point-max) t)
                     (progn
                       (forward-word -1)
-                      (set-window-point win (point)))
-                  (message "Could not find function `%s'" func))))))))
+                      (set-window-point win (point))
+                      (message "Found documentation for function `%s'" func)
+                      t)
+                  (progn
+                    (message "Could not find function `%s'" func)
+                    nil))))))))
 
 (defvar erlang-man-file-regexp
   "\\(.*\\)/man[^/]*/\\([^.]+\\)\\.\\([124-9]\\|3\\(erl\\)?\\)\\(\\.gz\\)?$")
