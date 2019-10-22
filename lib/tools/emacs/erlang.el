@@ -6301,13 +6301,14 @@ Tab characters are counted by their visual width."
 (defun erlang-completion-module-fun-at-point ()
   ""
   (require 'thingatpt)
-  (when (thing-at-point-looking-at "[a-z0-9_]+:[a-zA-Z0-9_]*")
-    (format "%s" (match-string-no-properties 0))))
+  ;; "^[ \t]+.*[ \t(),<>=![,()=]\\([a-z0-9_]+:[a-zA-Z0-9_]*\\)"
+  (when (thing-at-point-looking-at "^[ \t]+.*[ \t(),<>=![,()=]\\([a-z0-9_]+:[a-zA-Z0-9_]*\\)")
+    (format "%s" (match-string-no-properties 1))))
 
 (defun erlang-completion-module-fun-at-point-bounds ()
   ""
   (if (erlang-completion-module-fun-at-point)
-      (list (match-beginning 0) (match-end 0))))
+      (list (match-beginning 1) (match-end 1))))
 
 
 (defun erlang-completion-get-escript-path ()
