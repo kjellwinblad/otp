@@ -6296,6 +6296,50 @@ Tab characters are counted by their visual width."
     (if (looking-at "[a-z0-9_]+")
         (match-string 0))))
 
+;; Complete at point hook functions for Erlang
+
+(defun erlang-completion-module-fun-at-point ()
+  ""
+  (require 'thingatpt)
+  (when (thing-at-point-looking-at "[a-z0-9_]+:[a-zA-Z0-9_]*")
+    (format "%s" (match-string-no-properties 0))))
+
+(defun erlang-completion-module-fun-at-point-bounds ()
+  ""
+  (if (erlang-completion-module-fun-at-point)
+      (list (match-beginning 0) (match-end 0))))
+
+
+(defun erlang-completion-get-escript-path ()
+  ""
+  (locate-file "emacs_erlang_mode_support.erl" load-path))
+
+(defun erlang-completion-at-point ()
+  ""
+  (interactive)
+  (let ((complete-string (erlang-completion-module-fun-at-point))
+        (bounds (erlang-completion-module-fun-at-point-bounds)))
+    (when bounds
+      (list (car bounds)
+            (car (cdr bounds))
+            (split-string
+             (with-temp-buffer
+               (progn
+                 (message (format "escript %s list_functions_in_module %s"
+                                  (erlang-completion-get-escript-path)
+                                  (car (split-string complete-string ":"))))
+                 (call-process-shell-command
+                  (format "escript %s list_functions_in_module %s"
+                          (erlang-completion-get-escript-path)
+                          (car (split-string complete-string ":"))) nil t)
+                 (buffer-string)))
+             ";")
+            :exclusive 'no))))
+
+
+;; End complete at point hook functions for Erlang
+
+
 (defconst erlang-unload-hook
   (list (lambda ()
           (ad-unadvise 'Man-notify-when-ready)
