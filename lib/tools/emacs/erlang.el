@@ -6298,6 +6298,28 @@ Tab characters are counted by their visual width."
 
 ;; Complete at point hook functions for Erlang
 
+(defun erlang-mode-project-dir ()
+  ""
+  (let ((file-path (buffer-file-name)))
+    (with-temp-buffer
+      (progn
+        (call-process-shell-command
+         (format "escript %s get_project_dir %s"
+                 (erlang-completion-get-escript-path)
+                 file-path) nil t)
+        (buffer-string)))))
+
+(defun erlang-mode-project-update-etags ()
+  ""
+  (let ((file-path (buffer-file-name)))
+    (with-temp-buffer
+      (progn
+        (shell-command
+         (format "escript %s update_etags %s &"
+                 (erlang-completion-get-escript-path)
+                 file-path) t)))
+    (message "Updating etags")))
+
 (defun erlang-completion-module-fun-at-point ()
   ""
   (require 'thingatpt)
