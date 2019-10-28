@@ -6384,7 +6384,6 @@ Tab characters are counted by their visual width."
                           (erlang-completion-get-escript-path)
                           (erlang-mode-completion-cache-dir)
                           file-name) nil t)
-                 (message (buffer-string))
                  (buffer-string)))
              ";")
             :exclusive 'no))))

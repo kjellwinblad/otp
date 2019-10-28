@@ -137,6 +137,20 @@ list_functions_in_module(CacheDir, FileNameStr, ModuleNameStr) ->
                   end,
                   proplists:get_value(exports, ModuleName:module_info())).
 
+
+show(P) ->
+    erlang:display(P),
+    P.
+
+list_functions_in_erl_file(FileNameStr) ->
+    {ok, Data} = file:read_file(FileNameStr),
+    Res = re:run(Data, "^[a-z0-9_]+\\s*\\([^\\)]*\\)", [dotall, global, multiline]),
+    case Res of
+        {match, ResList} -> [ string:slice(Data, Start, Length) || [{Start, Length}] <- ResList];
+        _ -> ok
+    end.
+
+
 main(["list_functions_in_module", CacheDir, FileNameStr, ModuleNameStr]) ->
     list_functions_in_module(CacheDir, FileNameStr, ModuleNameStr);
 main(["get_project_dir", FileNameStr]) ->
@@ -146,4 +160,6 @@ main(["update_etags", FileNameStr]) ->
 main(["update_module_names_cache", CacheDir, FileNameStr]) ->
     erlang_project_update_all_modules_cache(CacheDir, erlang_project_dir(FileNameStr));
 main(["list_modules", CacheDir, FileNameStr]) ->
-    io:format(erlang_project_all_modules_string(CacheDir, FileNameStr)).
+    io:format(erlang_project_all_modules_string(CacheDir, FileNameStr));
+main(["list_functions_in_erl_file", FileNameStr]) ->
+    io:format("~p", [list_functions_in_erl_file(FileNameStr)]).
