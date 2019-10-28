@@ -6309,6 +6309,12 @@ Tab characters are counted by their visual width."
                  file-path) nil t)
         (buffer-string)))))
 
+(defun erlang-mode-completion-cache-dir ()
+  ""
+  (concat (file-name-as-directory (locate-user-emacs-file "cache"))
+          (file-name-as-directory "erlang_mode_completion_cache")))
+
+
 (defun erlang-mode-project-update-etags ()
   ""
   (let ((file-path (buffer-file-name)))
@@ -6324,7 +6330,9 @@ Tab characters are counted by their visual width."
   ""
   (require 'thingatpt)
   ;; "^[ \t]+.*[ \t(),<>=![,()=]\\([a-z0-9_]+:[a-zA-Z0-9_]*\\)"
-  (when (thing-at-point-looking-at "^[ \t]+.*[ \t(),<>=![,()=]\\([a-z0-9_]+:[a-zA-Z0-9_]*\\)")
+  (when (and (thing-at-point-looking-at "^[ \t]+.*[ \t(),<>=![,()=]\\([a-z0-9_]+:[a-zA-Z0-9_]*\\)")
+             (>= (point) (match-beginning 1))
+             (<= (point) (match-end 1)))
     (format "%s" (match-string-no-properties 1))))
 
 (defun erlang-completion-module-fun-at-point-bounds ()
@@ -6333,27 +6341,76 @@ Tab characters are counted by their visual width."
       (list (match-beginning 1) (match-end 1))))
 
 
+(defun erlang-completion-module-at-point ()
+  ""
+  (interactive)
+  (require 'thingatpt)
+  ;; "^[ \t]+.*[ \t(),<>=![,()=]\\([a-z0-9_]+:[a-zA-Z0-9_]*\\)"
+  (when (and (thing-at-point-looking-at "^[ \t]+.*[ \t(),<>=![,()=]\\([a-z0-9_]*\\):[a-zA-Z0-9_]*")
+             (>= (point) (match-beginning 1))
+             (<= (point) (match-end 1)))
+    (message "match and point %s %d " (list (match-beginning 1) (match-end 1)) (point))
+    (format "%s" (match-string-no-properties 1))))
+
+(defun erlang-completion-module-at-point-bounds ()
+  ""
+  (interactive)
+  (if (erlang-completion-module-at-point)
+      (list (match-beginning 1) (match-end 1))))
+
 (defun erlang-completion-get-escript-path ()
   ""
   (locate-file "emacs_erlang_mode_support.erl" load-path))
 
-(defun erlang-completion-at-point ()
+
+(defun erlang-module-completion-at-point ()
   ""
   (interactive)
-  (let ((complete-string (erlang-completion-module-fun-at-point))
-        (bounds (erlang-completion-module-fun-at-point-bounds)))
+  (let ((complete-string (erlang-completion-module-at-point))
+        (bounds (erlang-completion-module-at-point-bounds))
+        (file-name (buffer-file-name)))
     (when bounds
       (list (car bounds)
             (car (cdr bounds))
             (split-string
              (with-temp-buffer
                (progn
-                 (message (format "escript %s list_functions_in_module %s"
+                 (message (format "escript %s list_modules %s %s"
                                   (erlang-completion-get-escript-path)
+                                  (erlang-mode-completion-cache-dir)
+                                  file-name))
+                 (call-process-shell-command
+                  (format "escript %s list_modules %s %s"
+                          (erlang-completion-get-escript-path)
+                          (erlang-mode-completion-cache-dir)
+                          file-name) nil t)
+                 (message (buffer-string))
+                 (buffer-string)))
+             ";")
+            :exclusive 'no))))
+
+(defun erlang-completion-at-point ()
+  ""
+  (interactive)
+  (let ((complete-string (erlang-completion-module-fun-at-point))
+        (bounds (erlang-completion-module-fun-at-point-bounds))
+        (file-name (buffer-file-name)))
+    (when bounds
+      (list (car bounds)
+            (car (cdr bounds))
+            (split-string
+             (with-temp-buffer
+               (progn
+                 (message (format "escript %s list_functions_in_module %s %s %s"
+                                  (erlang-completion-get-escript-path)
+                                  (erlang-mode-completion-cache-dir)
+                                  file-name
                                   (car (split-string complete-string ":"))))
                  (call-process-shell-command
-                  (format "escript %s list_functions_in_module %s"
+                  (format "escript %s list_functions_in_module %s %s %s"
                           (erlang-completion-get-escript-path)
+                          (erlang-mode-completion-cache-dir)
+                          file-name
                           (car (split-string complete-string ":"))) nil t)
                  (buffer-string)))
              ";")
