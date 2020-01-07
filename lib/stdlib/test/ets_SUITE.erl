@@ -163,7 +163,8 @@ all() ->
      {group, benchmark},
      test_table_size_concurrency,
      test_table_memory_concurrency,
-     test_delete_table_while_size_snapshot].
+     test_delete_table_while_size_snapshot,
+     update_counter_improper_index].
 
 
 groups() ->
@@ -8313,3 +8314,10 @@ primes_3mod4() ->
     [103, 211, 503, 1019, 2003, 5003, 10007, 20011, 50023,
      100003, 200003, 500083, 1000003, 2000003, 5000011,
      10000019, 20000003, 50000047, 100000007].
+
+
+%% ERL-1125
+update_counter_improper_index(Config) when is_list(Config) ->
+    ets:new(table_2, [public,named_table,ordered_set,{read_concurrency, true},{write_concurrency, true}]),
+    ets:update_counter(table_2, 101065, {1, 1}, {101065, 0}).
+    ok.
