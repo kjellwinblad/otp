@@ -19,10 +19,11 @@
  */
 #ifndef _ERL_GLOBAL_H
 #define _ERL_GLOBAL_H
+#include "ei.h"
 
-char **erl_global_names(int fd, int *count);
-ETERM *erl_global_whereis(int fd, const char *name, char *node);
-int erl_global_register(int fd, const char *name, ETERM *pid);
-int erl_global_unregister(int fd, const char *name);
+char **ei_global_names(ei_cnode *ec, int fd, int *count);
+int ei_global_whereis(ei_cnode *ec, int fd, const char *name, erlang_pid* pid, char *node);
+int ei_global_register(int fd, const char *name, erlang_pid *self);
+int ei_global_unregister(ei_cnode *ec, int fd, const char *name);
 
 #endif /* _ERL_GLOBAL_H */

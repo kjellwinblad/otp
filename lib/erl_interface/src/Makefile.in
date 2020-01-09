@@ -456,17 +456,6 @@ REGISTRYSRC = \
 	registry/reg_tabstat.c
 
 ERLSOURCES = \
-	legacy/decode_term.c \
-	legacy/encode_term.c \
-	legacy/erl_connect.c \
-	legacy/erl_error.c \
-	legacy/erl_eterm.c \
-	legacy/erl_fix_alloc.c \
-	legacy/erl_format.c \
-	legacy/erl_malloc.c \
-	legacy/erl_marshal.c \
-	legacy/erl_resolve.c \
-	legacy/erl_timeout.c \
 	legacy/global_names.c \
 	legacy/global_register.c \
 	legacy/global_unregister.c \

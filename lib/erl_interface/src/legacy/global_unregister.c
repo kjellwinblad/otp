@@ -23,18 +23,18 @@
 #include "eisend.h"
 #include "eirecv.h"
 #include "ei_connect_int.h"
-#include "erl_interface.h"
-#include "erl_connect.h"
+#include "ei_connect.h"
+#include "erl_global.h"
 
 /* remove the association between name and its pid */
 /* global:unregister_name(name) -> ok */
-int erl_global_unregister(int fd, const char *name)
+int ei_global_unregister(ei_cnode *ec, int fd, const char *name)
 {
   char buf[EISMALLBUF];
   char *bufp=buf;
   char tmpbuf[64];
   int index = 0;
-  erlang_pid *self = erl_self();
+  erlang_pid *self = ei_self(ec);
   erlang_msg msg;
   int i;
   int version,arity,msglen;

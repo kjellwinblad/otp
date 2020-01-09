@@ -37,12 +37,6 @@
     <title>Deprecation and Removal</title>
     <note><p>The support for VxWorks is deprecated as of OTP 22, and
     will be removed in OTP 23.</p></note>
-    <note><p>The old legacy <c>erl_interface</c> library (functions
-    with prefix <c>erl_</c>) is deprecated as of OTP 22, and will be
-    removed in OTP 23. This does not apply to the <c>ei</c>
-    library. Reasonably new <c>gcc</c> compilers will issue deprecation
-    warnings. In order to disable these warnings, define the macro
-    <c>EI_NO_DEPR_WARN</c>.</p></note>
   </section>
 
   <section>
@@ -60,7 +54,7 @@
         <seealso marker="mnesia:mnesia">Mnesia</seealso></item>
     </list>
     <note>
-      <p>By default, the <c>Erl_Interface</c> libraries are only guaranteed
+      <p>By default, the <c>Erl_Interface</c> library is only guaranteed
         to be compatible with other Erlang/OTP components from the same
         release as the libraries themselves. For information about how to
         communicate with Erlang/OTP components from earlier releases, see
@@ -98,10 +92,9 @@
   <section>
     <title>Compiling and Linking Your Code</title>
     <p>To use any of the <c>Erl_Interface</c> functions, include the
-      following lines in your code:</p>
+      following line in your code:</p>
 
     <code type="none"><![CDATA[
-#include "erl_interface.h"
 #include "ei.h"    ]]></code>
 
     <p>Determine where the top directory of your OTP installation is.
@@ -114,7 +107,7 @@ Eshell V4.7.4  (abort with ^G)
 /usr/local/otp    ]]></code>
 
     <p>To compile your code, ensure that your C compiler knows where
-      to find <c>erl_interface.h</c> by specifying an appropriate
+      to find <c>ei.h</c> by specifying an appropriate
       <c>-I</c> argument on the command line, or add it to
       the <c>CFLAGS</c> definition in your
       <c>Makefile</c>. The correct value for this path is
@@ -140,11 +133,9 @@ $ cc -c -I/usr/local/otp/lib/erl_interface-3.2.3/include myprog.c    ]]></code>
     <p>When linking:</p>
 
     <list type="bulleted">
-      <item>Specify the path to <c>liberl_interface.a</c> and
-        <c>libei.a</c> with
+      <item>Specify the path to <c>libei.a</c> with
         <c>-L$OTPROOT/lib/erl_interface-3.2.3/lib</c>.</item>
-      <item>Specify the name of the libraries with
-        <c>-lerl_interface -lei</c>.</item>
+      <item>Specify the name of the library with <c>-lei</c>.</item>
     </list>
 
     <p>Do this on the command line or add the flags to the
@@ -155,7 +146,7 @@ $ cc -c -I/usr/local/otp/lib/erl_interface-3.2.3/include myprog.c    ]]></code>
 
     <code type="none"><![CDATA[
 $ ld -L/usr/local/otp/lib/erl_interface-3.2.3/
-                            lib myprog.o -lerl_interface -lei -o myprog    ]]></code>
+                            lib myprog.o -lei -o myprog    ]]></code>
 
     <p>On some systems it can be necessary to link with some more
       libraries (for example, <c>libnsl.a</c> and
@@ -174,19 +165,11 @@ $ ld -L/usr/local/otp/lib/erl_interface-3.2.3/
   </section>
 
   <section>
-    <title>Initializing the Libraries</title>
+    <title>Initializing the Library</title>
     <p>
-      Before calling any of the other functions in the <c>erl_interface</c>
-      and <c>ei</c> libraries, call <c>erl_init()</c> exactly once to initialize
-      both libraries.
-      <c>erl_init()</c> takes two arguments. However, the arguments
-      are no longer used by <c>erl_interface</c> and are therefore to be
-      specified as <c>erl_init(NULL,0)</c>.
-    </p>
-    <p>
-      If you only use the <c>ei</c> library, instead initialize it by calling
-      <c>ei_init()</c> exactly once before calling any other functions in
-      the <c>ei</c> library.
+      Before calling any of the other functions in the library,
+      initialize it by calling
+      <c>ei_init()</c> exactly once.
     </p>
   </section>
 
@@ -199,187 +182,93 @@ $ ld -L/usr/local/otp/lib/erl_interface-3.2.3/
 
     <p>The <c>Erl_Interface</c> library supports this activity. It has
       several C functions that create and manipulate Erlang data
-      structures. The library also contains an encode and a decode function.
-      The following example shows how to create and encode an Erlang tuple
-      <c>{tobbe,3928}</c>:</p>
+      structures. The following example shows how to create and encode
+      an Erlang tuple <c>{tobbe,3928}</c>:</p>
 
     <code type="none"><![CDATA[
-ETERM *arr[2], *tuple;
-char buf[BUFSIZ];
-int i;
-  
-arr[0] = erl_mk_atom("tobbe");
-arr[1] = erl_mk_integer(3928);
-tuple  = erl_mk_tuple(arr, 2);
-i = erl_encode(tuple, buf);    ]]></code>
+ei_x_buff buf;
+ei_x_new(&buf);
+int i = 0;
+ei_x_encode_tuple_header(&buf, 2);
+ei_x_encode_atom(&buf, "tobbe");
+ei_x_encode_long(&buf, 3928);    ]]></code>
 
-    <p>Alternatively, you can use <c>erl_send()</c> and
-      <c>erl_receive_msg</c>, which handle the encoding and
-      decoding of messages transparently.</p>
-
-    <p>For a complete description, see the following modules:</p>
-    <list type="bulleted">
-      <item><seealso marker="erl_eterm"><c>erl_eterm</c></seealso>
-        for creating Erlang terms</item>
-      <item><seealso marker="erl_marshal"><c>erl_marshal</c></seealso>
-        for encoding and decoding routines</item>
-    </list>
+    <p>For a complete description, see the
+    <seealso marker="ei"><c>ei</c></seealso> module.</p>
   </section>
 
   <section>
     <marker id="building_terms_and_patterns"/>
-    <title>Building Terms and Patterns</title>
+    <title>Building Terms</title>
     <p>The previous example can be simplified by using the
-      <seealso marker="erl_format"><c>erl_format</c></seealso> module
+      <seealso marker="ei:ei_x_format_wo_ver"><c>ei_x_format_wo_ver</c></seealso> function
       to create an Erlang term:</p>
 
     <code type="none"><![CDATA[
-ETERM *ep;
-ep = erl_format("{~a,~i}", "tobbe", 3928);    ]]></code>
+ei_x_buff buf;
+ei_x_new(&buf);
+ei_x_format_wo_ver(&buf, "{~a,~i}", "tobbe", 3928);    ]]></code>
 
-    <p>For a complete description of the different format directives, see
-      the <seealso marker="erl_format"><c>erl_format</c></seealso> module.</p>
+    <p>For a complete description of the different format directives, see the
+      the <seealso marker="ei:ei_x_format_wo_ver"><c>ei_x_format_wo_ver</c></seealso> function.</p>
 
     <p>The following example is more complex:</p>
 
     <code type="none"><![CDATA[
-ETERM *ep;
-ep = erl_format("[{name,~a},{age,~i},{data,~w}]",
-                 "madonna", 
-                 21, 
-                 erl_format("[{adr,~s,~i}]", "E-street", 42));
-erl_free_compound(ep);      ]]></code>
+ei_x_buff buf;
+int i = 0;
+ei_x_new(&buf);
+ei_x_format_wo_ver(&buf,
+                   "[{name,~a},{age,~i},{data,[{adr,~s,~i}]}]",
+                   "madonna",
+                   21,
+                  "E-street", 42);
+ei_print_term(stdout, buf.buff, &i);
+ei_x_free(&buf);      ]]></code>
 
     <p>As in the previous examples, it is your responsibility to free the
       memory allocated for Erlang terms. In this example,
-      <c>erl_free_compound()</c> ensures that the complete term
-      pointed to by <c>ep</c> is released. This is necessary
-      because the pointer from the second call to <c>erl_format</c> is lost.</p>
+      <c>ei_x_free()</c> ensures that the data
+      pointed to by <c>buf</c> is released.</p>
 
-    <p>The following example shows a slightly different solution:</p>
-
-    <code type="none"><![CDATA[
-ETERM *ep,*ep2;
-ep2 = erl_format("[{adr,~s,~i}]","E-street",42);
-ep  = erl_format("[{name,~a},{age,~i},{data,~w}]",
-                 "madonna", 21, ep2);
-erl_free_term(ep);  
-erl_free_term(ep2);      ]]></code>
-
-    <p>In this case, you free the two terms independently. The order in
-      which you free the terms <c>ep</c> and <c>ep2</c>
-      is not important,
-      because the <c>Erl_Interface</c> library uses reference counting to
-      determine when it is safe to remove objects.</p>
-
-    <p>If you are unsure whether you have freed the terms properly, you
-      can use the following function to see the status of the fixed term
-      allocator:</p>
-
-    <code type="none"><![CDATA[
-long allocated, freed;
-
-erl_eterm_statistics(&allocated,&freed);
-printf("currently allocated blocks: %ld\n",allocated);
-printf("length of freelist: %ld\n",freed);
-
-/* really free the freelist */
-erl_eterm_release();
-    ]]></code>
-
-    <p>For more information, see the
-      <seealso marker="erl_malloc"><c>erl_malloc</c></seealso> module.</p>
-  </section>
-
-  <section>
-    <title>Pattern Matching</title>
-    <p>An Erlang pattern is a term that can contain unbound variables or
-      <c>"do not care"</c> symbols. Such a pattern can be matched
-      against a
-      term and, if the match is successful, any unbound variables in the
-      pattern will be bound as a side effect. The content of a bound
-      variable can then be retrieved:</p>
-
-    <code type="none"><![CDATA[
-ETERM *pattern;
-pattern = erl_format("{madonna,Age,_}");    ]]></code>
-
-    <p>The <seealso marker="erl_format#erl_match">
-      <c>erl_format:erl_match</c></seealso> function
-      performs pattern matching. It takes a
-      pattern and a term and tries to match them. As a side effect any unbound
-      variables in the pattern will be bound. In the following example, a
-      pattern is created with a variable <c>Age</c>, which is included at two
-      positions in the tuple. The pattern match is performed as follows:</p>
-
-    <list type="bulleted">
-      <item>
-        <p><c>erl_match</c> binds the contents of <c>Age</c> to <c>21</c>
-          the first time it reaches the variable.</p>
-      </item>
-      <item>
-        <p>The second occurrence of <c>Age</c> causes a test for
-          equality between the terms, as <c>Age</c> is already bound to
-          <c>21</c>. As <c>Age</c> is bound to <c>21</c>, the equality test
-          succeeds and the match continues until the end of the pattern.</p>
-      </item>
-      <item>
-        <p>If the end of the pattern is reached, the match succeeds and you
-          can retrieve the contents of the variable.</p>
-      </item>
-    </list>
-
-    <code type="none"><![CDATA[
-ETERM *pattern,*term;
-pattern = erl_format("{madonna,Age,Age}");
-term    = erl_format("{madonna,21,21}");
-if (erl_match(pattern, term)) {
-  fprintf(stderr, "Yes, they matched: Age = ");
-  ep = erl_var_content(pattern, "Age"); 
-  erl_print_term(stderr, ep);
-  fprintf(stderr,"\n");
-  erl_free_term(ep);
-}
-erl_free_term(pattern);
-erl_free_term(term);    ]]></code>
-
-    <p>For more information, see the
-      <seealso marker="erl_format#erl_match">
-      <c>erl_format:erl_match</c></seealso> function.</p>
   </section>
 
   <section>
     <title>Connecting to a Distributed Erlang Node</title>
     <p>To connect to a distributed Erlang node, you must first
-      initialize the connection routine with
-      <seealso marker="erl_connect#erl_connect_init">
-      <c>erl_connect:erl_connect_init</c></seealso>,
-      which stores information, such as the hostname, node name, and IP
-      address for later use:</p>
+      initialize the connection routine with one of the
+      <seealso marker="ei_connect#ei_connect_init">
+      <c>erl_connect:erl_connect_init_*</c></seealso> functions,
+      which stores information, such as the hostname, and node name
+      for later use:</p>
 
     <code type="none"><![CDATA[
 int identification_number = 99;
 int creation=1;
 char *cookie="a secret cookie string"; /* An example */
-erl_connect_init(identification_number, cookie, creation);    ]]></code>
+const char* node_name = "einode@durin";
+const char *cookie = NULL;
+short creation = time(NULL) + 1;
+ei_cnode ec;
+ei_connect_init(ec,
+                node_name,
+                cookie,
+                creation);    ]]></code>
 
     <p>For more information, see the
-      <seealso marker="erl_connect"><c>erl_connect</c></seealso> module.</p>
+      <seealso marker="ei_connect"><c>ei_connect</c></seealso> module.</p>
 
     <p>After initialization, you set up the connection to the Erlang node.
-      To specify the Erlang node you want to connect to, use
-      <c>erl_connect()</c>. The following example sets up the
+      To specify the Erlang node you want to connect to, use the
+      <c>ei_connect_*()</c> family of functions. The following example sets up the
       connection and is to result in a valid socket file descriptor:</p>
 
     <code type="none"><![CDATA[
 int sockfd;
-char *nodename="xyz@chivas.du.etx.ericsson.se"; /* An example */
-if ((sockfd = erl_connect(nodename)) < 0)
-  erl_err_quit("ERROR: erl_connect failed");    ]]></code>
+const char* node_name = "einode@durin"; /* An example */
+if ((sockfd = ei_connect(ec, nodename)) < 0)
+  fprintf(stderr, "ERROR: erl_connect failed");    ]]></code>
 
-    <p><c>erl_err_quit()</c> prints the specified string and
-      terminates the program. For more information, see the
-      <seealso marker="erl_error"><c>erl_error</c></seealso> module.</p>
   </section>
 
   <section>
@@ -394,7 +283,7 @@ if ((sockfd = erl_connect(nodename)) < 0)
       correct port number to connect to.</p>
 
     <p>When you use
-      <seealso marker="erl_connect"><c>erl_connect</c></seealso>
+      <seealso marker="ei_connect"><c>ei_connect</c></seealso>
       to connect to an Erlang node, a connection is first made to
       <c>epmd</c> and, if the node is known, a
       connection is then made to the Erlang node.</p>
@@ -409,7 +298,7 @@ if ((sockfd = erl_connect(nodename)) < 0)
     <code type="none"><![CDATA[
 int pub;
 
-pub = erl_publish(port);    ]]></code>
+pub = ei_publish(ec, port);    ]]></code>
 
     <p><c>pub</c> is a file descriptor now connected to
       <c>epmd</c>. <c>epmd</c>
@@ -424,17 +313,9 @@ pub = erl_publish(port);    ]]></code>
       failed. If a node has failed in this way, <c>epmd</c>
       prevents you from
       registering a new node with the old name, as it thinks that the old
-      name is still in use. In this case, you must unregister the name
-      explicitly:</p>
+      name is still in use. In this case, you must close the port
+      explicitly</p>
 
-    <code type="none"><![CDATA[
-erl_unpublish(node);    ]]></code>
-
-    <p>This causes <c>epmd</c> to close the connection from the
-      far end. Notice
-      that if the name was in fact still in use by a node, the results of
-      this operation are unpredictable. Also, doing this does not cause the
-      local end of the connection to close, so resources can be consumed.</p>
   </section>
 
   <section>

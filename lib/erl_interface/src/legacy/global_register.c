@@ -22,15 +22,15 @@
 #include "eiext.h"
 #include "eisend.h"
 #include "eirecv.h"
-#include "erl_interface.h"
+#include "ei.h"
+#include "erl_global.h"
 
-int erl_global_register(int fd, const char *name, ETERM *pid)
+int ei_global_register(int fd, const char *name, erlang_pid *self)
 {
   char buf[EISMALLBUF];
   char *bufp=buf;
   char tmpbuf[64];
   int index = 0;
-  erlang_pid self;
   erlang_msg msg;
   int needlink, needatom, needmonitor;
   int arity;
@@ -38,24 +38,19 @@ int erl_global_register(int fd, const char *name, ETERM *pid)
   int msglen;
   int i;
 
-  /* get that pid into a better format */
-  if (!erl_encode(pid,(unsigned char*)buf)) return -1;
-  if (ei_decode_version(buf,&index,&version)
-      || ei_decode_pid(buf,&index,&self)) return -1;
-  
   /* set up rpc arguments */
   /* { PidFrom, { call, Mod, Fun, Args, user }}  */
   index = 0;
   ei_encode_version(buf,&index);
   ei_encode_tuple_header(buf,&index,2);
-  ei_encode_pid(buf,&index,&self);               /* PidFrom */
+  ei_encode_pid(buf,&index,self);               /* PidFrom */
   ei_encode_tuple_header(buf,&index,5);
   ei_encode_atom(buf,&index,"call");            /* call */
   ei_encode_atom(buf,&index,"global");          /* Mod */
   ei_encode_atom(buf,&index,"register_name_external");    /* Fun */
   ei_encode_list_header(buf,&index,3);     /* Args: [ name, self(), cnode ] */
   ei_encode_atom(buf,&index,name);
-  ei_encode_pid(buf,&index,&self); 
+  ei_encode_pid(buf,&index,self); 
   ei_encode_tuple_header(buf,&index,2);
   ei_encode_atom(buf,&index,"global"); /* special "resolve" treatment */ 
   ei_encode_atom(buf,&index,"cnode");  /* i.e. we get a SEND when conflict */
@@ -63,7 +58,7 @@ int erl_global_register(int fd, const char *name, ETERM *pid)
   ei_encode_atom(buf,&index,"user");            /* user */
 
   /* make the rpc call */
-  if (ei_send_reg_encoded(fd,&self,"rex",buf,index)) return -1;
+  if (ei_send_reg_encoded(fd,self,"rex",buf,index)) return -1;
 
   /* get the reply: expect link and an atom, or just an atom */
   needlink = needatom = needmonitor = 1;
