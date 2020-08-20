@@ -276,9 +276,10 @@ void ethr_cond_broadcast(ethr_cond *);
 int ethr_cond_wait(ethr_cond *, ethr_mutex *);
 
 typedef enum {
-    ETHR_RWMUTEX_TYPE_NORMAL,
-    ETHR_RWMUTEX_TYPE_FREQUENT_READ,
-    ETHR_RWMUTEX_TYPE_EXTREMELY_FREQUENT_READ
+    ETHR_RWMUTEX_TYPE_SEQLOCK = 1,
+    ETHR_RWMUTEX_TYPE_NORMAL = 2,
+    ETHR_RWMUTEX_TYPE_FREQUENT_READ = 3,
+    ETHR_RWMUTEX_TYPE_EXTREMELY_FREQUENT_READ = 4
 } ethr_rwmutex_type;
 
 typedef enum {
@@ -289,6 +290,7 @@ typedef enum {
 
 typedef struct {
     ethr_rwmutex_type type;
+    int is_seq_lock;
     ethr_rwmutex_lived lived;
     int main_spincount;
     int aux_spincount;
@@ -324,6 +326,7 @@ struct ethr_rwmutex_ {
 #if ETHR_XCHK
     int initialized;
 #endif
+    ethr_atomic_t seq_nr;
 };
 
 #else /* pthread_rwlock */
@@ -351,6 +354,9 @@ void ethr_rwmutex_runlock(ethr_rwmutex *);
 int ethr_rwmutex_tryrwlock(ethr_rwmutex *);
 void ethr_rwmutex_rwlock(ethr_rwmutex *);
 void ethr_rwmutex_rwunlock(ethr_rwmutex *);
+/* TODO: Fix type */
+long ethr_rwmutex_read_seq_nr(ethr_rwmutex *);
+int ethr_rwmutex_validate_seq_nr(ethr_rwmutex *);
 #endif
 
 #ifdef ETHR_MTX_HARD_DEBUG
@@ -774,6 +780,26 @@ ETHR_INLINE_MTX_FUNC_NAME_(ethr_rwmutex_rwunlock)(ethr_rwmutex *rwmtx)
     int res = pthread_rwlock_unlock(&rwmtx->pt_rwlock);
     if (res != 0)
 	ETHR_FATAL_ERROR__(res);
+}
+
+/* The pthread version of ethr_rwmutex_read_seq_nr and
+   ethr_rwmutex_validate_seq_nr is a standard read lock */
+static ETHR_INLINE long
+ETHR_INLINE_MTX_FUNC_NAME_(ethr_rwmutex_read_seq_nr)(ethr_rwmutex *rwmtx)
+{
+    int res = pthread_rwlock_rdlock(&rwmtx->pt_rwlock);
+    if (res != 0)
+	ETHR_FATAL_ERROR__(res);
+    return 1;
+}
+
+static ETHR_INLINE int
+ETHR_INLINE_MTX_FUNC_NAME_(ethr_rwmutex_validate_seq_nr)(ethr_rwmutex *rwmtx)
+{
+    int res = pthread_rwlock_unlock(&rwmtx->pt_rwlock);
+    if (res != 0)
+	ETHR_FATAL_ERROR__(res);
+    return 1;
 }
 
 #endif /* ETHR_TRY_INLINE_FUNCS */
