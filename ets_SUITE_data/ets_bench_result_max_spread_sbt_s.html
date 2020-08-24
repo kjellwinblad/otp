@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+
+<!-- %% -->
+<!-- %% %CopyrightBegin% -->
+<!-- %% -->
+<!-- %% Copyright Ericsson AB and Kjell Winblad 1996-2020. All Rights Reserved. -->
+<!-- %% -->
+<!-- %% Licensed under the Apache License, Version 2.0 (the "License"); -->
+<!-- %% you may not use this file except in compliance with the License. -->
+<!-- %% You may obtain a copy of the License at -->
+<!-- %% -->
+<!-- %%     http://www.apache.org/licenses/LICENSE-2.0 -->
+<!-- %% -->
+<!-- %% Unless required by applicable law or agreed to in writing, software -->
+<!-- %% distributed under the License is distributed on an "AS IS" BASIS, -->
+<!-- %% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. -->
+<!-- %% See the License for the specific language governing permissions and -->
+<!-- %% limitations under the License. -->
+<!-- %% -->
+<!-- %% %CopyrightEnd% -->
+<!-- %% -->
+<!-- %% Author: Kjell Winblad -->
+<!-- %% -->
+  
+  <head>
+    <meta charset="utf-8">
+    <title>ETS Benchmark Result Viewer</title>
+  </head>
+
+  <body>
+    <div id="insertPlaceholder"></div>
+    <h1>ETS Benchmark Result Viewer</h1>
+    <p>
+      This page generates graphs from data produced by the ETS benchmark which is defined in the function <code>ets_SUITE:throughput_benchmark/0</code> (see "<code>$ERL_TOP/lib/stdlib/test/ets_SUITE.erl</code>").
+    </p>
+    <p>
+      Note that one can paste results from several benchmark runs into the field below. Results from the same scenario but from different benchmark runs will be relabeled and ploted in the same graph automatically. This makes comparisons of different ETS versions easy. 
+    </p>
+    <p>
+      Note also that that lines can be hidden by clicking on the corresponding label.
+    </p>
+    Paste the generated data in the field below and press the Render button:
+    <br>
+    <textarea id="dataField" rows="4" cols="50"># Each instance of the benchmark runs for 5.0 seconds:
+# The result of a benchmark instance is presented as a number representing
+# the number of operations performed per second:
+
+
+# To plot graphs for the results below:
+# 1. Open "$ERL_TOP/lib/stdlib/test/ets_SUITE_data/visualize_throughput.html" in a web browser
+# 2. Copy the lines between "#BENCHMARK STARTED$" and "#BENCHMARK ENDED$" below
+# 3. Paste the lines copied in step 2 to the text box in the browser window opened in
+#    step 1 and press the Render button
+
+#BENCHMARK STARTED$
+Scenario:  50.000000% insert,  50.000000% delete | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 63$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 992293.800000; 1150732.800000; 2195073.800000; 3585557.800000; 4452725.800000; 6818362.400000; 8626910.600000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 622639.200000; 1142911.800000; 2353810.600000; 3540313.400000; 5520424.600000; 6843474.400000; 9381221.800000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 696102.600000; 1374145.400000; 2735961.000000; 5712112.200000; 10598781.200000; 17444076.800000; 6453724.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1231998.200000; 1406287.400000; 2758077.000000; 6278144.600000; 11140961.000000; 18622066.000000; 6337958.600000$
+Scenario:  40.000000% insert,  40.000000% delete,  20.000000% lookup | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 63$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 940445.400000; 1106293.800000; 2098052.800000; 3519118.800000; 5186939.800000; 7336843.400000; 9599880.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 901274.600000; 1129627.200000; 2012440.200000; 3588006.000000; 5185053.800000; 7713866.400000; 9932408.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 931113.800000; 1193485.000000; 2576307.200000; 4025610.400000; 5002706.400000; 5111973.000000; 6075364.600000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1059307.000000; 1340667.600000; 2274654.400000; 4208859.400000; 5339860.800000; 5268592.200000; 6352624.400000$
+Scenario:  10.000000% insert,  10.000000% delete,  80.000000% lookup | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 63$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1173164.600000; 1421951.200000; 3114013.400000; 5534177.600000; 9251109.800000; 14073302.400000; 19270194.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 845665.800000; 1335613.400000; 2591904.400000; 5766940.400000; 9103752.800000; 13678438.400000; 19525936.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1044804.800000; 1216861.400000; 2342922.200000; 5121158.400000; 8587724.400000; 11290811.600000; 15827657.400000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1180801.200000; 1408300.400000; 2627065.800000; 5637930.000000; 9260636.200000; 12426901.000000; 16566056.600000$
+Scenario:  1.000000% insert,  1.000000% delete,  98.000000% lookup | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 63$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1250783.600000; 1455661.200000; 4437418.200000; 7420160.600000; 13177211.200000; 24634458.000000; 33936330.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 1201449.200000; 1448377.400000; 2973320.200000; 7341322.800000; 13930119.600000; 25877165.600000; 33804726.400000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1153666.600000; 1379423.600000; 2871224.200000; 6584005.800000; 12094560.000000; 21820473.600000; 29797628.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1282531.800000; 1423558.400000; 2966789.600000; 7573049.800000; 13490845.400000; 24566938.200000; 32581255.000000$
+Scenario:  100.000000% lookup | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 63$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1298786.400000; 1586623.800000; 2733281.600000; 7740566.800000; 14879042.600000; 29056037.400000; 36974721.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 1351159.600000; 1582112.800000; 4192102.800000; 7883430.800000; 15243253.600000; 30909815.800000; 38702565.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1230690.400000; 1466856.400000; 4248826.600000; 7529689.200000; 14069116.400000; 26629475.800000; 37876774.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1283432.600000; 1445647.200000; 2861453.000000; 7700938.000000; 14644012.600000; 30019056.000000; 37794428.600000$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq10 | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 63$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 407095.400000; 586068.800000; 1124879.200000; 2048918.200000; 3330383.200000; 5329290.400000; 7236675.600000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 443924.800000; 644414.600000; 1271913.200000; 2146532.000000; 3745471.200000; 6010224.600000; 8276926.800000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 438036.200000; 721204.800000; 1451044.800000; 2505764.000000; 4426111.200000; 6831151.400000; 9518377.800000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 490872.800000; 787702.800000; 1664090.800000; 2979651.800000; 5110160.200000; 7503991.800000; 10152463.600000$
+Scenario:  10.000000% insert,  10.000000% delete,  40.000000% lookup,  40.000000% nextseq1000 | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 63$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 7995.600000; 15206.200000; 31239.000000; 57643.400000; 111209.400000; 208076.800000; 296163.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 9667.000000; 18862.000000; 36965.600000; 70390.200000; 125057.400000; 226844.400000; 309107.800000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 8101.400000; 15898.000000; 31932.800000; 60087.200000; 115865.200000; 226105.200000; 358524.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 9818.000000; 17643.600000; 35342.800000; 71040.600000; 135754.000000; 250132.600000; 365908.600000$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% selectAll | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 63$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 776.400000; 2522.800000; 4970.600000; 11042.000000; 18917.000000; 37104.400000; 69248.800000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 1093.800000; 2461.400000; 5289.600000; 9904.400000; 18330.400000; 34480.000000; 60937.400000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1555.000000; 2133.200000; 5207.000000; 9835.200000; 18595.000000; 35972.200000; 61749.400000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1103.800000; 3055.800000; 4612.000000; 9326.200000; 17097.200000; 36297.800000; 60814.200000$
+Scenario:  10.000000% insert,  10.000000% delete,  79.000000% lookup,  1.000000% partial_select1000 | Key Range Size: 1000000$
+; 1; 2; 4; 8; 16; 32; 63$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1347.400000; 2207.200000; 3924.000000; 8581.400000; 16492.800000; 33309.400000; 54002.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 1184.600000; 2127.400000; 4674.000000; 8444.800000; 17665.600000; 38397.800000; 59580.400000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 845.400000; 2211.200000; 4936.400000; 8500.600000; 17805.400000; 36830.400000; 53201.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1126.600000; 2309.000000; 4693.800000; 8812.400000; 15884.200000; 36194.800000; 54314.600000$
+
+#BENCHMARK ENDED$
+
+</textarea> 
+    <br>
+    <input type="checkbox" id="throughputPlot" checked> Include Throughput Plot
+    <br>
+    <input type="checkbox" id="betterThanWorstPlot"> Include % More Throughput Than Worst Plot
+    <br>
+    <input type="checkbox" id="worseThanBestPlot"> Include % Less Throughput Than Best Plot
+    <br>
+    <input type="checkbox" id="barPlot"> Bar Plot
+    <br>
+    <input type="checkbox" id="sameSpacing" checked> Same X Spacing Between Points
+    <br>
+    <input type="checkbox" class="showCheck" value="[ordered_set,public]" checked> Show <code>[ordered_set,public]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[ordered_set,public,{write_concurrency,true}]" checked> Show <code>[ordered_set,public,{write_concurrency,true}]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[ordered_set,public,{read_concurrency,true}]" checked> Show <code>[ordered_set,public,{read_concurrency,true}]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[ordered_set,public,{write_concurrency,true},{read_concurrency,true}]" checked> Show <code>[ordered_set,public,{write_concurrency,true},{read_concurrency,true}]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[set,public]" checked> Show <code>[set,public]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[set,public,{write_concurrency,true}]" checked> Show <code>[set,public,{write_concurrency,true}]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[set,public,{read_concurrency,true}]" checked> Show <code>[set,public,{read_concurrency,true}]</code>
+    <br>
+    <input type="checkbox" class="showCheck" value="[set,public,{write_concurrency,true},{read_concurrency,true}]" checked> Show <code>[set,public,{write_concurrency,true},{read_concurrency,true}]</code>
+    <br>
+    <button id="renderButton" type="button">Render</button> 
+    
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+	    integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E="
+	    crossorigin="anonymous"></script>
+    <script>
+      var loading = false;
+      function toggleLoadingScreen(){
+          if(loading){
+              $("#loading").remove();
+              loading = false;
+          }else{
+              $('<div id="loading">'+
+                '<span style="position: fixed; top: 50%;left: 50%;color: white;"><b>Loading...</b></span>'+
+                '</div>')
+                  .css({position: "fixed",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: "100%",
+                        'background-color': "#000",
+                        filter:"alpha(opacity=50)",
+                        '-moz-opacity':"0.5",
+                        '-khtml-opacity': "0.5",
+                        opacity: "0.5",
+                        'z-index': "10000"})
+                  .appendTo(document.body);
+              loading = true;
+
+          }
+      }
+      //Start loading screen before downloading plotly which is quite large
+      toggleLoadingScreen();
+    </script>
+    <script src="https://cdn.plot.ly/plotly-1.5.0.min.js"></script>    
+    <script>
+      String.prototype.replaceAll = function(search, replacement) {
+          var target = this;
+          return target.split(search).join(replacement);
+      };
+      String.prototype.myTrim = function() {
+          var target = this;
+          return target.replace(/^\s+|\s+$/g, '');
+      };
+      function plotGraph(lines, sameSpacing, barPlot, prefix) {
+          var xvals = null;
+          var data = [];
+          while(lines.length > 0 &&
+                (lines[0].myTrim() == "" ||
+                 lines[0].myTrim().indexOf(";") !== -1)){
+              var line = lines.shift().myTrim();
+              if(line == "" || line.startsWith("#")){
+                  continue;
+              } else if(line.startsWith(";")) {
+                  xvals = line.split(";")
+                  xvals.shift(); // Remove first
+                  xvals = $.map(xvals, function (i){
+                      if(sameSpacing){
+                          return "_"+i.myTrim();
+                      }else{
+                          return parseInt(i.myTrim(), 10);
+                      }
+                  });
+              }else{
+                  line = line.split(";")
+                  var label = prefix + line.shift().myTrim();
+                  var yvals = $.map(line, function (i){
+                      return parseFloat(i.myTrim(), 10);
+                  });
+                  var trace = {
+                      x: xvals,
+                      y: yvals,
+                      mode: 'lines+markers',
+                      name: label
+                  };
+                  if(barPlot){
+                      trace['type'] = "bar";
+                  }
+                  data.push(trace);
+              }
+              
+          }
+          return data;
+      }
+      function toCompareData(dataParam, compareWithWorst) {
+          var data = $.extend(true, [], dataParam);
+          var worstSoFarMap = {};
+          var defaultSoFarValue = compareWithWorst ? Number.MAX_VALUE : Number.MIN_VALUE;
+          function getWorstBestSoFar(x){
+              return worstSoFarMap[x] === undefined ? defaultSoFarValue : worstSoFarMap[x];
+          }
+          function setWorstBestSoFar(x, y){
+              return worstSoFarMap[x] = y;
+          }
+          function lessOrGreaterThan(n1, n2){
+            return compareWithWorst ? n1 < n2 : n1 > n2;
+          } 
+          $.each(data, function(i, allResConfig) {
+            $.each(allResConfig.y, function(index, res) {
+                var xName = allResConfig.x[index];
+                if(lessOrGreaterThan(res, getWorstBestSoFar(xName))){
+                    setWorstBestSoFar(xName, res);                     
+                }
+            });
+          });
+          $.each(data, function(i, allResConfig) {
+            $.each(allResConfig.y, function(index, res) {
+                var xName = allResConfig.x[index];
+                if(compareWithWorst){
+                    allResConfig.y[index] = ((res / getWorstBestSoFar(xName))-1.0) * 100;
+                }else{
+                    allResConfig.y[index] = (1.0 -(res / getWorstBestSoFar(xName))) * 100;
+                }
+            });
+          });
+          return data;
+      }
+      function toBetterThanWorstData(data){
+        return toCompareData(data, true);
+      }
+      function toWorseThanBestData(data){
+        return toCompareData(data, false);
+      }
+      function plotGraphs(){
+          var insertPlaceholder = $("#insertPlaceholder");
+          var sameSpacing = $('#sameSpacing').is(":checked");
+          var barPlot = $('#barPlot').is(":checked");
+          var throughputPlot = $('#throughputPlot').is(":checked");
+          var betterThanWorstPlot = $('#betterThanWorstPlot').is(":checked");
+          var worseThanBestPlot = $('#worseThanBestPlot').is(":checked");
+          var lines = $("#dataField").val();
+          $('.showCheck').each(function() {
+              var item = $(this);
+              if(!item.is(":checked")){
+                  lines = lines.replaceAll(item.val(), "#"+item.val())
+              }
+          });
+          lines = lines.split("$");
+          var nrOfGraphs = 0;
+          var scenarioDataMap = {};
+          var scenarioNrOfVersionsMap = {};
+          var scenarioList = [];
+          while(lines.length > 0){
+              var line = lines.shift().myTrim();
+              if(line == ""){
+                  continue;
+              } else if(line.startsWith("Scenario:")) {
+                  nrOfGraphs = nrOfGraphs + 1;
+                  var name = line;
+                  if(scenarioDataMap[name] === undefined){
+                      scenarioDataMap[name] = [];
+                      scenarioNrOfVersionsMap[name] = 0;
+                      scenarioList.push(line);
+                  }
+                  scenarioNrOfVersionsMap[name] = scenarioNrOfVersionsMap[name] + 1;
+                  var prefix = undefined;
+                  if(scenarioNrOfVersionsMap[name] === 1){
+                      prefix = "";
+                  }else{
+                      prefix = "Ver: " + scenarioNrOfVersionsMap[name] + " ";
+                  }
+                  scenarioDataMap[name] =
+                      scenarioDataMap[name].concat(
+                          plotGraph(lines, sameSpacing, barPlot, prefix));
+              }
+          }
+          var nrOfGraphs = 0;
+          function plotScenario(name, plotType) {
+              var data = scenarioDataMap[name];
+              var yAxisTitle = undefined;
+              nrOfGraphs = nrOfGraphs + 1;
+              $("<div class='added' id='graph" + nrOfGraphs + "'>")
+                  .insertBefore(insertPlaceholder);
+              $("<button type='button' class='added' id='fullscreenButton" + nrOfGraphs + "'>Fill screen</button>")
+                  .insertBefore(insertPlaceholder);
+              $("<span class='added'><br><hr><br></span>")
+                  .insertBefore(insertPlaceholder);
+              if (plotType === 'throughput') {
+                  yAxisTitle = 'Operations/Second';
+              } else if (plotType === 'better_than_worst') {
+                  yAxisTitle = '% More Throughput Than Worst';
+                  data = toBetterThanWorstData(data);
+              } else {
+                  yAxisTitle = '% Less Throughput Than Best';
+                  data = toWorseThanBestData(data);
+              }
+              var layout = {
+                  title: name,
+                  xaxis: {
+                      title: '# of Processes'
+                  },
+                  yaxis: {
+                      title: yAxisTitle
+                  }
+              };
+              $("#fullscreenButton" + nrOfGraphs).click(
+                  function () {
+                      $('#graph' + nrOfGraphs).replaceWith(
+                          $("<div class='added' id='graph" + nrOfGraphs + "'>"));
+                      layout = $.extend({}, layout, {
+                          width: $(window).width() - 40,
+                          height: $(window).height() - 40
+                      });
+                      Plotly.newPlot('graph' + nrOfGraphs, data, layout);
+                  });
+              Plotly.newPlot('graph' + nrOfGraphs, data, layout);
+          }
+          $.each(scenarioList,
+              function (index, name) {
+                  if (throughputPlot) {
+                      plotScenario(name, 'throughput');
+                  }
+                  if (betterThanWorstPlot) {
+                      plotScenario(name, 'better_than_worst');
+                  }
+                  if (worseThanBestPlot) {
+                      plotScenario(name, 'worse_than_best');
+                  }
+              });
+      }
+    $(document).ready(function(){
+        $('#renderButton').click(
+            function(){
+                toggleLoadingScreen();
+                setTimeout(function(){
+                    try {                       
+                        $( ".added" ).remove();
+                        plotGraphs();
+                        toggleLoadingScreen();
+                    } catch(e){
+                        toggleLoadingScreen();
+                        console.log(e);
+                        alert("Error happened when parsing data.\n" +
+                              "See console for more info");
+                    }
+                }, 10);
+            });
+        setTimeout(function(){
+            $( ".added" ).remove();
+            plotGraphs();
+            toggleLoadingScreen();
+        }, 10);
+    });
+  </script>
+  </body>
+</html>
