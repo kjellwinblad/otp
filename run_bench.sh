@@ -6,13 +6,13 @@ sudo apt-get install -y xsltproc fop openssl libssl-dev unixodbc-dev autoconf bu
 
 #git clean -d -x -f
 
-numactl --hardware >> ets_SUITE_data/numactl_hardware
+numactl --hardware > ets_SUITE_data/numactl_hardware
 
-cat /proc/cpuinfo >> ets_SUITE_data/proc_cpuinfo
+cat /proc/cpuinfo > ets_SUITE_data/proc_cpuinfo
 
-cat /proc/meminfo >> ets_SUITE_data/proc_meminfo
+cat /proc/meminfo > ets_SUITE_data/proc_meminfo
 
-lsb_release -a >> ets_SUITE_data/os_info
+lsb_release -a > ets_SUITE_data/os_info
 
 echo LINUX >> ets_SUITE_data/os_info
 
