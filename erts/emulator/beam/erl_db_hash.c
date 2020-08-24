@@ -3284,7 +3284,6 @@ static Eterm build_term_list(Process* p, HashDbTerm* ptr1, HashDbTerm* ptr2,
     Eterm list = NIL;
     Eterm copy;
     Eterm *hp, *hend;
-
     if (!sz) {
 	ptr = ptr1;
 	while(ptr != ptr2) {
@@ -3299,10 +3298,18 @@ static Eterm build_term_list(Process* p, HashDbTerm* ptr1, HashDbTerm* ptr2,
 
     ptr = ptr1;
     while(ptr != ptr2) {
+        if (ptr == NULL) {
+            break;
+        }
 	if (!is_pseudo_deleted(ptr)) {
 	    copy = db_copy_object_from_ets(&tb->common, &ptr->dbterm, &hp, &MSO(p));
 	    list = CONS(hp, copy, list);
 	    hp  += 2;
+            if(tb->common.type & DB_SEQ_LOCK) {
+                /* We know that we are in a set and we can get into
+                   trouble if we don't break here */
+                break;
+            }
 	}
 	ptr = ptr->next;
     }
