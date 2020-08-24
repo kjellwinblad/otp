@@ -2154,6 +2154,7 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
     int is_fine_locked, frequent_read;
     int is_decentralized_counters;
     int is_decentralized_counters_option;
+    int is_seq_lock;
     int cret;
     DbTableMethod* meth;
 
@@ -2171,6 +2172,7 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
     frequent_read = 0;
     is_decentralized_counters = 0;
     is_decentralized_counters_option = -1;
+    is_seq_lock = 0;
     heir = am_none;
     heir_data = (UWord) am_undefined;
     is_compressed = erts_ets_always_compress;
@@ -2212,6 +2214,13 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 			frequent_read = 1;
 		    } else if (tp[2] == am_false) {
 			frequent_read = 0;
+		    } else break;
+		}
+                else if (tp[1] == am_seq_lock) {
+		    if (tp[2] == am_true) {
+			is_seq_lock = 1;
+		    } else if (tp[2] == am_false) {
+			is_seq_lock = 0;
 		    } else break;
 		}
 		else if (tp[1] == am_heir && tp[2] == am_none) {
@@ -2271,6 +2280,9 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
 	meth = &db_hash;
 	if (is_fine_locked && !(status & DB_PRIVATE)) {
 	    status |= DB_FINE_LOCKED;
+            if (is_seq_lock) {
+                status |= DB_SEQ_LOCK;
+            }
 	}
     }
     else if (IS_TREE_TABLE(status)) {

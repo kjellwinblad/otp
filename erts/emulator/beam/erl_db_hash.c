@@ -368,11 +368,27 @@ static ERTS_INLINE Sint next_slot_w(DbTableHash* tb, Uint ix,
     return ix;
 }
 
+static void do_free_hash_db_term(void *vptr)
+{
+    HashDbTerm *p = (HashDbTerm *)vptr;
+    db_free_term_no_tab(p->compress, p, offsetof(HashDbTerm, dbterm));
+}
 
+static ERTS_INLINE void free_term_later(DbTableHash *tb, HashDbTerm* p)
+{
+    p->compress = tb->common.compress;
+    erts_schedule_db_free(&tb->common,
+                          do_free_hash_db_term,
+                          p,
+                          &p->free_item,
+                          db_term_size((DbTable*)tb, p, offsetof(HashDbTerm, dbterm)));
+}
 
 static ERTS_INLINE void free_term(DbTableHash *tb, HashDbTerm* p)
 {
-    db_free_term((DbTable*)tb, p, offsetof(HashDbTerm, dbterm));
+    free_term_later(tb, p);
+    /* TODO free_term without later may actually be preferable somtimes*/
+    //db_free_term((DbTable*)tb, p, offsetof(HashDbTerm, dbterm));
 }
 
 static ERTS_INLINE void free_term_list(DbTableHash *tb, HashDbTerm* p)
@@ -617,17 +633,23 @@ static ERTS_INLINE HashDbTerm* replace_dbterm(DbTableHash* tb, HashDbTerm* old,
 					      Eterm obj)
 {
     HashDbTerm* ret;
+    DbTerm* old_dbterm;
     ASSERT(old != NULL);
+    old_dbterm = &(old->dbterm);
+    if(tb->common.type & DB_SEQ_LOCK) {
+        free_term_later(tb, old);
+        old_dbterm = NULL;
+    }
     if (tb->common.compress) {
 	ret = db_store_term_comp(&tb->common,
                                  tb->common.keypos,
-                                 &(old->dbterm),
+                                 old_dbterm,
                                  offsetof(HashDbTerm,dbterm),
                                  obj);
     }
     else {
 	ret = db_store_term(&tb->common,
-                            &(old->dbterm),
+                            old_dbterm,
                             offsetof(HashDbTerm,dbterm),
                             obj);
     }
@@ -810,6 +832,9 @@ int db_create_hash(Process *p, DbTable *tbl)
     if (tb->common.type & DB_FINE_LOCKED) {
 	erts_rwmtx_opt_t rwmtx_opt = ERTS_RWMTX_OPT_DEFAULT_INITER;
 	int i;
+        if (tb->common.type & DB_SEQ_LOCK){
+            rwmtx_opt.is_seq_lock = 1;
+        }
 	if (tb->common.type & DB_FREQ_READ)
 	    rwmtx_opt.type = ERTS_RWMTX_TYPE_FREQUENT_READ;
 	if (erts_ets_rwmtx_spin_count >= 0)
@@ -1105,7 +1130,13 @@ int db_put_hash(DbTable *tbl, Eterm obj, int key_clash_fail,
 	}
 	q = replace_dbterm(tb, b, obj);
 	q->next = bnext;
+        q->compress = tb->common.compress;
 	ASSERT(q->hvalue == hval);
+        /* Sequence lock requires that the stores before are ordered
+           before linking in the new item */
+        if (tb->common.type & DB_SEQ_LOCK){
+            ERTS_THR_WRITE_MEMORY_BARRIER;
+        }
 	*bp = q;
 	goto Ldone;
     }
@@ -1148,7 +1179,13 @@ Lnew:
     q = new_dbterm(tb, obj);
     q->hvalue = hval;
     q->pseudo_deleted = 0;
+    q->compress = tb->common.compress;
     q->next = b;
+    /* Sequence lock requires that the stores before are ordered
+       before linking in the new item */
+    if (tb->common.type & DB_SEQ_LOCK){
+        ERTS_THR_WRITE_MEMORY_BARRIER;
+    }
     *bp = q;
     INC_NITEMS(tb, lck_ctr, hval);
     nitems = NITEMS_ESTIMATE(tb, lck_ctr, hval);
@@ -1196,9 +1233,15 @@ int db_get_hash(Process *p, DbTable *tbl, Eterm key, Eterm *ret)
     int ix;
     HashDbTerm* b;
     erts_rwmtx_t* lck;
-
+    Sint seq_nr = -1;
     hval = MAKE_HASH(key);
-    lck = RLOCK_HASH(tb,hval);
+    lck = tb->common.is_thread_safe ? NULL : GET_LOCK(tb,hval);
+    if (lck != NULL && erts_rwmtx_is_seq_lock(lck)){
+        seq_nr = erts_rwmtx_read_seq_nr(lck);
+    } else {
+    take_rlock:
+        lck = RLOCK_HASH(tb,hval);
+    }
     ix = hash_to_ix(tb, hval);
     b = BUCKET(tb, ix);
 
@@ -1211,7 +1254,14 @@ int db_get_hash(Process *p, DbTable *tbl, Eterm key, Eterm *ret)
     }
     *ret = NIL;
 done:
-    RUNLOCK_HASH(lck);
+    if (seq_nr == -1) {
+        RUNLOCK_HASH(lck);
+    } else if (!erts_rwmtx_validate_seq_nr(lck, seq_nr)){
+        seq_nr = -1;
+        goto take_rlock;
+    } else {
+        //printf("SEQ VAL OK %ld\n", seq_nr);
+    }
     return DB_ERROR_NONE;
 }
     

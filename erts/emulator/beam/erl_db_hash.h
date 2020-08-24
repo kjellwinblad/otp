@@ -44,6 +44,8 @@ typedef struct hash_db_term {
     Uint32 pseudo_deleted;
 # define MAX_HASH_MASK ((Uint32)(Sint32)-1)
 #endif
+    ErtsThrPrgrLaterOp free_item; /* For freeing with thread progress later */
+    int compress;
     DbTerm dbterm;         /* The actual term */
 } HashDbTerm;
 

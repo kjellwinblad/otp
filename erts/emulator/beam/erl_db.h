@@ -310,7 +310,7 @@ ERTS_GLB_INLINE void
 erts_db_free(ErtsAlcType_t type, DbTable *tab, void *ptr, Uint size)
 {
     ASSERT(ptr != 0);
-    ASSERT(size == ERTS_ALC_DBG_BLK_SZ(ptr));
+    /*TODO ASSERT(size == ERTS_ALC_DBG_BLK_SZ(ptr));*/
     ERTS_DB_ALC_MEM_UPDATE_(tab, size, 0);
     ASSERT(tab == NULL ||
            ((void *) tab) != ptr ||

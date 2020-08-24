@@ -608,6 +608,7 @@ atom set_on_spawn
 atom set_seq_token
 atom set_tcw
 atom set_tcw_fake
+atom seq_lock
 atom sighup
 atom sigterm
 atom sigusr1
