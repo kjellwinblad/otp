@@ -56,34 +56,34 @@
 #BENCHMARK STARTED$
 Scenario:  50.000000% insert,  50.000000% delete | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 63$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1018382.200000; 1120083.400000; 2067402.800000; 3513373.400000; 4634410.800000; 7668027.200000; 9461643.000000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 561816.600000; 1116690.200000; 2059168.400000; 3520927.000000; 4277155.000000; 6805430.800000; 9390281.200000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 691102.400000; 1338069.600000; 2412432.600000; 6108218.200000; 10878078.800000; 18896954.600000; 7759811.400000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1246234.200000; 1340708.400000; 2645890.600000; 6172116.600000; 10480875.800000; 18392128.800000; 6464105.800000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1022458.000000; 1762800.000000; 2977498.800000; 4954420.200000; 8443885.800000; 7841834.000000; 9722234.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 986194.200000; 1738045.600000; 2787855.800000; 4984251.200000; 8331802.400000; 8018043.200000; 9322008.800000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 597332.000000; 2053294.400000; 3703873.800000; 7224520.800000; 14014563.200000; 20503016.000000; 7602347.400000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1209539.400000; 2297141.600000; 4147542.400000; 7452531.800000; 14186759.800000; 19831844.800000; 6355261.400000$
 Scenario:  40.000000% insert,  40.000000% delete,  20.000000% lookup | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 63$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 976812.600000; 1112361.200000; 2016515.800000; 3575556.400000; 5013986.800000; 7340055.400000; 9867794.200000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 985660.400000; 1182814.000000; 2035287.400000; 3552247.400000; 5087792.200000; 7553682.600000; 9719163.800000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1016370.800000; 1226473.800000; 2136094.200000; 3830725.800000; 4953549.200000; 5100013.200000; 5840147.200000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1084068.200000; 1254271.400000; 2234563.000000; 4011808.400000; 5214416.000000; 5164356.600000; 6126882.400000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 991388.400000; 1631462.400000; 2659550.200000; 4141099.400000; 6147852.400000; 7519097.400000; 9890695.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 855894.600000; 1473262.800000; 2522530.800000; 4116631.800000; 6314231.400000; 7945578.600000; 9945264.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 908659.600000; 1780258.000000; 3341009.800000; 6042103.000000; 9075180.200000; 5049599.200000; 6007232.400000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 984791.200000; 1910512.400000; 3503690.400000; 6446044.600000; 9912906.600000; 5430660.800000; 6340615.400000$
 Scenario:  10.000000% insert,  10.000000% delete,  80.000000% lookup | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 63$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1050409.400000; 1452860.000000; 2524800.000000; 5472908.000000; 8880592.800000; 14154741.200000; 18525417.800000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 1045527.400000; 1286459.400000; 2607891.400000; 5518046.000000; 9363214.200000; 14295905.400000; 19015520.600000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1080857.400000; 1309288.000000; 2523824.800000; 5184766.000000; 8452237.000000; 11525368.600000; 16335752.000000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1245400.600000; 1551995.200000; 2772460.200000; 6043102.600000; 9305736.200000; 12275890.000000; 16343593.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1234566.600000; 2289709.800000; 3871971.000000; 6451293.000000; 10946079.000000; 14415417.000000; 18707990.600000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 1200312.600000; 2227339.000000; 3834040.200000; 6532596.200000; 11042687.400000; 14708569.200000; 19514402.600000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1068650.600000; 2064328.800000; 3705885.200000; 6622515.400000; 12265969.800000; 13642689.200000; 18318951.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1238945.200000; 2426542.200000; 4199041.600000; 7463870.400000; 13922147.200000; 14234040.800000; 18445998.600000$
 Scenario:  1.000000% insert,  1.000000% delete,  98.000000% lookup | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 63$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1265692.400000; 1514557.600000; 2832091.200000; 7572606.400000; 12847145.200000; 26653111.800000; 34127361.800000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 1124961.400000; 1597943.600000; 3045253.400000; 7203005.400000; 14393323.400000; 26585430.600000; 35213042.400000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1250260.800000; 1520856.200000; 2976997.400000; 6508827.600000; 11933680.400000; 21448229.600000; 30015127.800000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1333535.200000; 1675272.200000; 3023461.600000; 7449396.200000; 13119063.000000; 25632761.800000; 33090489.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1357598.600000; 2616855.800000; 4739104.000000; 8679310.400000; 16586434.400000; 28648131.800000; 36782256.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 1373794.800000; 2605040.600000; 4738745.600000; 8553463.600000; 16415379.600000; 28830675.800000; 37076018.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1236307.400000; 2415609.200000; 4317399.800000; 7766853.800000; 14723491.400000; 25296600.200000; 32518441.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1342831.200000; 2608701.000000; 4578733.800000; 8474444.400000; 16040700.800000; 27500756.000000; 34943063.200000$
 Scenario:  100.000000% lookup | Key Range Size: 1000000$
 ; 1; 2; 4; 8; 16; 32; 63$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1400900.400000; 1654279.000000; 3085550.600000; 7358131.800000; 13448876.400000; 28178404.600000; 37351425.400000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 1315318.000000; 1725932.200000; 3133259.000000; 7919375.800000; 14842986.000000; 30386075.600000; 38757097.600000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1282783.400000; 1463124.600000; 2967246.000000; 7113048.000000; 13417639.200000; 27633318.600000; 37864066.200000$
-[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1185256.400000; 1480956.000000; 3068159.400000; 7651318.600000; 14978228.400000; 28870842.200000; 38353274.800000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true},{seq_lock,true}] ; 1400274.600000; 2750172.600000; 5002939.000000; 9270656.600000; 17836825.600000; 35429459.400000; 42946299.800000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false},{seq_lock,true}] ; 1421217.800000; 2753045.000000; 4963449.400000; 9267685.600000; 18042694.000000; 35752354.800000; 42757156.000000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,true}] ; 1321852.400000; 2533020.600000; 4559753.400000; 8452584.200000; 16815257.000000; 31932644.600000; 40258629.200000$
+[set,public,{decentralized_counters,true},{write_concurrency,true},{read_concurrency,false}] ; 1380001.200000; 2764045.000000; 4661154.400000; 8664291.800000; 18195456.400000; 32756172.600000; 41248606.600000$
 
 #BENCHMARK ENDED$
 
