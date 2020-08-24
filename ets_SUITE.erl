@@ -6941,31 +6941,31 @@ throughput_benchmark() ->
                [
                {1.0, lookup}
                ]
-	       # ,
-               # [
-               #  {0.1, insert},
-               #  {0.1, delete},
-               #  {0.4, lookup},
-               #  {0.4, nextseq10}
-               # ],
-               # [
-               #  {0.1, insert},
-               #  {0.1, delete},
-               #  {0.4, lookup},
-               #  {0.4, nextseq1000}
-               # ],
-               # [
-               #  {0.1, insert},
-               #  {0.1, delete},
-               #  {0.79, lookup},
-               #  {0.01, selectAll}
-               # ],
-               # [
-               #  {0.1, insert},
-               #  {0.1, delete},
-               #  {0.79, lookup},
-               #  {0.01, partial_select1000}
-               # ]
+	       % ,
+               % [
+               %  {0.1, insert},
+               %  {0.1, delete},
+               %  {0.4, lookup},
+               %  {0.4, nextseq10}
+               % ],
+               % [
+               %  {0.1, insert},
+               %  {0.1, delete},
+               %  {0.4, lookup},
+               %  {0.4, nextseq1000}
+               % ],
+               % [
+               %  {0.1, insert},
+               %  {0.1, delete},
+               %  {0.79, lookup},
+               %  {0.01, selectAll}
+               % ],
+               % [
+               %  {0.1, insert},
+               %  {0.1, delete},
+               %  {0.79, lookup},
+               %  {0.01, partial_select1000}
+               % ]
               ],
          print_result_paths_fun = fun stdout_notify_res/2}).
 
