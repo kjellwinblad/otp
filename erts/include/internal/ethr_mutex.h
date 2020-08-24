@@ -297,7 +297,7 @@ typedef struct {
 } ethr_rwmutex_opt;
 
 #define ETHR_RWMUTEX_OPT_DEFAULT_INITER \
-  {ETHR_RWMUTEX_TYPE_NORMAL, ETHR_RWMUTEX_UNKNOWN_LIVED, -1, -1}
+  {ETHR_RWMUTEX_TYPE_NORMAL, 0, ETHR_RWMUTEX_UNKNOWN_LIVED, -1, -1}
 
 #ifdef ETHR_USE_OWN_RWMTX_IMPL__
 
@@ -354,9 +354,10 @@ void ethr_rwmutex_runlock(ethr_rwmutex *);
 int ethr_rwmutex_tryrwlock(ethr_rwmutex *);
 void ethr_rwmutex_rwlock(ethr_rwmutex *);
 void ethr_rwmutex_rwunlock(ethr_rwmutex *);
+int ethr_rwmutex_is_seq_lock(ethr_rwmutex *rwmtx);
 /* TODO: Fix type */
 long ethr_rwmutex_read_seq_nr(ethr_rwmutex *);
-int ethr_rwmutex_validate_seq_nr(ethr_rwmutex *);
+int ethr_rwmutex_validate_seq_nr(ethr_rwmutex *, long);
 #endif
 
 #ifdef ETHR_MTX_HARD_DEBUG
@@ -794,7 +795,7 @@ ETHR_INLINE_MTX_FUNC_NAME_(ethr_rwmutex_read_seq_nr)(ethr_rwmutex *rwmtx)
 }
 
 static ETHR_INLINE int
-ETHR_INLINE_MTX_FUNC_NAME_(ethr_rwmutex_validate_seq_nr)(ethr_rwmutex *rwmtx)
+ETHR_INLINE_MTX_FUNC_NAME_(ethr_rwmutex_validate_seq_nr)(ethr_rwmutex *rwmtx, long seq_nr)
 {
     int res = pthread_rwlock_unlock(&rwmtx->pt_rwlock);
     if (res != 0)

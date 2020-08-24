@@ -129,6 +129,12 @@ ethr_mutex_lib_init(int cpu_conf)
     return res;
 }
 
+int
+ethr_rwmutex_is_seq_lock(ethr_rwmutex *rwmtx)
+{
+    return rwmtx->type & ETHR_RWMUTEX_TYPE_SEQLOCK;
+}
+
 #ifdef ETHR_USE_OWN_RWMTX_IMPL__
 
 #ifdef ETHR_ATOMIC_HAVE_INC_DEC_INSTRUCTIONS
@@ -3132,11 +3138,13 @@ long ethr_rwmutex_read_seq_nr(ethr_rwmutex * rwmtx)
     return ethr_atomic_read_acqb(&rwmtx->seq_nr);
 }
 
-int ethr_rwmutex_validate_seq_nr(ethr_rwmutex * rwmtx)
+int ethr_rwmutex_validate_seq_nr(ethr_rwmutex * rwmtx, long seq_nr)
 {
+    long new_seq_nr;
     /* Acquire barrier */
     ETHR_MEMBAR(ETHR_LoadLoad | ETHR_LoadStore);
-    return ethr_atomic_read(&rwmtx->seq_nr) & 1;
+    new_seq_nr = ethr_atomic_read(&rwmtx->seq_nr);
+    return seq_nr == new_seq_nr && (new_seq_nr & 1);
 }
 
 #else

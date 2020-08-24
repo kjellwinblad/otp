@@ -446,6 +446,9 @@ ERTS_GLB_INLINE void erts_rwmtx_init(erts_rwmtx_t *rwmtx,
                                      Eterm extra,
                                      erts_lock_flags_t flags);
 ERTS_GLB_INLINE void erts_rwmtx_destroy(erts_rwmtx_t *rwmtx);
+ERTS_GLB_INLINE int erts_rwmtx_is_seq_lock(erts_rwmtx_t *rwmtx);
+ERTS_GLB_INLINE long erts_rwmtx_read_seq_nr(erts_rwmtx_t *rwmtx);
+ERTS_GLB_INLINE int erts_rwmtx_validate_seq_nr(erts_rwmtx_t *rwmtx, Sint seq_nr);
 #ifdef ERTS_ENABLE_LOCK_POSITION
 ERTS_GLB_INLINE int erts_rwmtx_tryrlock_x(erts_rwmtx_t *rwmtx, char *file, unsigned int line);
 ERTS_GLB_INLINE void erts_rwmtx_rlock_x(erts_rwmtx_t *rwmtx, char *file, unsigned int line);
@@ -1908,6 +1911,24 @@ erts_rwmtx_destroy(erts_rwmtx_t *rwmtx)
 #endif
 	    erts_thr_fatal_error(res, "destroy rwmutex");
     }
+}
+
+ERTS_GLB_INLINE int
+erts_rwmtx_is_seq_lock(erts_rwmtx_t *rwmtx)
+{
+    return ethr_rwmutex_is_seq_lock(&rwmtx->rwmtx);
+}
+
+ERTS_GLB_INLINE long
+erts_rwmtx_read_seq_nr(erts_rwmtx_t *rwmtx)
+{
+    return ethr_rwmutex_read_seq_nr(&rwmtx->rwmtx);
+}
+
+ERTS_GLB_INLINE int
+erts_rwmtx_validate_seq_nr(erts_rwmtx_t *rwmtx, Sint seq_nr)
+{
+    return ethr_rwmutex_validate_seq_nr(&rwmtx->rwmtx, seq_nr);
 }
 
 ERTS_GLB_INLINE int
