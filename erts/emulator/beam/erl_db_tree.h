@@ -26,6 +26,8 @@
 typedef struct tree_db_term {
     struct  tree_db_term *left, *right;  /* left and right child */
     int  balance;                        /* tree balancing value */
+    ErtsThrPrgrLaterOp free_item; /* For freeing with thread progress later */
+    int compress;
     DbTerm dbterm;                       /* The actual term */
 } TreeDbTerm;
 

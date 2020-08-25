@@ -66,9 +66,27 @@
 #define DEC_NITEMS(DB)                                                  \
     erts_flxctr_dec(&(DB)->common.counters, ERTS_DB_TABLE_NITEMS_COUNTER_ID)
 
+static void do_free_tree_db_term(void *vptr)
+{
+    TreeDbTerm *p = (TreeDbTerm *)vptr;
+    db_free_term_no_tab(p->compress, p, offsetof(TreeDbTerm, dbterm));
+}
+
+
+static ERTS_INLINE void free_term_later(DbTable *tb, TreeDbTerm* p)
+{
+    p->compress = ((DbTableCommon*)tb)->compress;
+    erts_schedule_db_free(((DbTableCommon*)tb),
+                          do_free_tree_db_term,
+                          p,
+                          &p->free_item,
+                          db_term_size((DbTable*)tb, p, offsetof(HashDbTerm, dbterm)));
+}
+
 static ERTS_INLINE void free_term(DbTable *tb, TreeDbTerm* p)
 {
-    db_free_term(tb, p, offsetof(TreeDbTerm, dbterm));
+    free_term_later(tb, p);
+    //db_free_term(tb, p, offsetof(TreeDbTerm, dbterm));
 }
 
 /*

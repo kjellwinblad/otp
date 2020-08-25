@@ -2275,6 +2275,9 @@ BIF_RETTYPE ets_new_2(BIF_ALIST_2)
         status |= DB_CA_ORDERED_SET;
         status &= ~(DB_SET | DB_BAG | DB_DUPLICATE_BAG | DB_ORDERED_SET);
         status |= DB_FINE_LOCKED;
+        if (is_seq_lock) {
+            status |= DB_SEQ_LOCK;
+        }
     }
     else if (IS_HASH_TABLE(status)) {
 	meth = &db_hash;

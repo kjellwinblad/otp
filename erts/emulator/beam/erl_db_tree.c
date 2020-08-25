@@ -166,12 +166,20 @@ static ERTS_INLINE TreeDbTerm* replace_dbterm(DbTableCommon *tb, TreeDbTerm* old
 					      Eterm obj)
 {
     TreeDbTerm* p;
+    DbTerm* old_dbterm;
+    old_dbterm = &(old->dbterm);
+    if(tb->type & DB_SEQ_LOCK) {
+        free_term_later((DbTable*)tb, old);
+        old_dbterm = NULL;
+    }
     ASSERT(old != NULL);
     if (tb->compress) {
-	p = db_store_term_comp(tb, tb->keypos, &(old->dbterm), offsetof(TreeDbTerm,dbterm), obj);
+	p = db_store_term_comp(tb, tb->keypos, old_dbterm, offsetof(TreeDbTerm,dbterm), obj);
+        p->compress = 1;
     }
     else {
-	p = db_store_term(tb, &(old->dbterm), offsetof(TreeDbTerm,dbterm), obj);
+	p = db_store_term(tb, old_dbterm, offsetof(TreeDbTerm,dbterm), obj);
+        p->compress = 0;
     }
     return p;
 }
@@ -836,11 +844,18 @@ int db_put_tree_common(DbTableCommon *tb, TreeDbTerm **root, Eterm obj,
     dstack[dpos++] = DIR_END;
     for (;;)
 	if (!*this) { /* Found our place */
+            TreeDbTerm * new_node;
 	    state = 1;
             INC_NITEMS(((DbTable*)tb));
-	    *this = new_dbterm(tb, obj);
-	    (*this)->balance = 0;
-	    (*this)->left = (*this)->right = NULL;
+            new_node = new_dbterm(tb, obj);
+            new_node->compress = 1;
+            new_node->balance = 0;
+            new_node->left = NULL;
+            new_node->right = NULL;
+            if (tb->type & DB_SEQ_LOCK){
+                ERTS_THR_WRITE_MEMORY_BARRIER;
+            }
+	    *this = new_node;
 	    break;
 	} else if ((c = cmp_key(tb, key, *this)) < 0) {
 	    /* go lefts */
@@ -852,7 +867,11 @@ int db_put_tree_common(DbTableCommon *tb, TreeDbTerm **root, Eterm obj,
 	    tstack[tpos++] = this;
 	    this = &((*this)->right);
 	} else if (!key_clash_fail) { /* Equal key and this is a set, replace. */
-	    *this = replace_dbterm(tb, *this, obj);
+            TreeDbTerm * new_node = replace_dbterm(tb, *this, obj);
+            if (tb->type & DB_SEQ_LOCK){
+                ERTS_THR_WRITE_MEMORY_BARRIER;
+            }
+	    *this = new_node;
 	    break;
 	} else {
 	    return DB_ERROR_BADKEY; /* key already exists */

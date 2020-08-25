@@ -6912,6 +6912,10 @@ throughput_benchmark() ->
          key_ranges = [1000000],
          table_types =
              [
+              [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}, {seq_lock, true}],
+              [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, false}, {seq_lock, true}],
+              [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}],
+              [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, false}],
               [set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}, {seq_lock, true}],
               [set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, false}, {seq_lock, true}],
               [set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}],

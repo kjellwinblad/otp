@@ -983,6 +983,30 @@ DbTableCATreeNode* find_rlock_valid_base_node(DbTableCATree* tb, Eterm key)
 }
 
 static ERTS_INLINE
+DbTableCATreeNode* find_seqlock_valid_base_node(DbTableCATree* tb, Eterm key, long* seq_nr_wb)
+{
+    DbTableCATreeNode* base_node;
+    int use_rlock = 0;
+    while (1) {
+        base_node = find_base_node(tb, key, NULL);
+        if (use_rlock) {
+            rlock_base_node(base_node);
+        } else {
+            *seq_nr_wb = erts_rwmtx_read_seq_nr(&base_node->u.base.lock);
+        }
+        if (base_node->u.base.is_valid)
+            break;
+        if (use_rlock) {
+            runlock_base_node_no_rand(base_node);
+        } else {
+            use_rlock = 1;
+            *seq_nr_wb = -1;
+        }
+    }
+    return base_node;
+}
+
+static ERTS_INLINE
 DbTableCATreeNode* find_wlock_valid_base_node(DbTableCATree* tb, Eterm key,
                                               FindBaseNode* fbn)
 {
@@ -1017,6 +1041,9 @@ static DbTableCATreeNode *create_base_node(DbTableCATree *tb,
 
     p->is_base_node = 1;
     p->u.base.root = root;
+    if (tb->common.type & DB_SEQ_LOCK){
+        rwmtx_opt.is_seq_lock = 1;
+    }
     if (tb->common.type & DB_FREQ_READ)
         rwmtx_opt.type = ERTS_RWMTX_TYPE_FREQUENT_READ;
     if (erts_ets_rwmtx_spin_count >= 0)
@@ -1678,11 +1705,24 @@ static int db_put_catree(DbTable *tbl, Eterm obj, int key_clash_fail,
 static int db_get_catree(Process *p, DbTable *tbl, Eterm key, Eterm *ret)
 {
     DbTableCATree *tb = &tbl->catree;
-    DbTableCATreeNode* node = find_rlock_valid_base_node(tb, key);
-    int result = db_get_tree_common(p, &tb->common,
-                                    node->u.base.root,
-                                    key, ret, NULL);
-    runlock_base_node(node, tb);
+    long seq_nr = -1;
+    DbTableCATreeNode* node;
+    int result;
+    if(tb->common.type & DB_SEQ_LOCK) {
+        node = find_seqlock_valid_base_node(tb, key, &seq_nr);
+    } else {
+    take_rlock:
+        node = find_rlock_valid_base_node(tb, key);
+    }
+    result = db_get_tree_common(p, &tb->common,
+                                node->u.base.root,
+                                key, ret, NULL);
+    if (seq_nr == -1) {
+        runlock_base_node(node, tb);
+    } else if (!erts_rwmtx_validate_seq_nr(&node->u.base.lock, seq_nr)){
+        seq_nr = -1;
+        goto take_rlock;
+    }
     return result;
 }
 
