@@ -1128,6 +1128,11 @@ int db_put_hash(DbTable *tbl, Eterm obj, int key_clash_fail,
 	    ret = DB_ERROR_BADKEY;
 	    goto Ldone;
 	}
+        if (/*(tb->common.type & DB_SEQ_LOCK) &&*/
+            !tb->common.compress &&
+            EQ(make_tuple(b->dbterm.tpl), obj)) {
+            goto Ldone;
+        }
 	q = replace_dbterm(tb, b, obj);
 	q->next = bnext;
         q->compress = tb->common.compress;
