@@ -80,7 +80,7 @@ static ERTS_INLINE void free_term_later(DbTable *tb, TreeDbTerm* p)
                           do_free_tree_db_term,
                           p,
                           &p->free_item,
-                          db_term_size((DbTable*)tb, p, offsetof(HashDbTerm, dbterm)));
+                          db_term_size((DbTable*)tb, p, offsetof(TreeDbTerm, dbterm)));
 }
 
 static ERTS_INLINE void free_term(DbTable *tb, TreeDbTerm* p)

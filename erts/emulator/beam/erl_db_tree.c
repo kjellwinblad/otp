@@ -175,12 +175,15 @@ static ERTS_INLINE TreeDbTerm* replace_dbterm(DbTableCommon *tb, TreeDbTerm* old
     ASSERT(old != NULL);
     if (tb->compress) {
 	p = db_store_term_comp(tb, tb->keypos, old_dbterm, offsetof(TreeDbTerm,dbterm), obj);
-        p->compress = 1;
     }
     else {
 	p = db_store_term(tb, old_dbterm, offsetof(TreeDbTerm,dbterm), obj);
         p->compress = 0;
     }
+    p->compress = 1;
+    p->balance = old->balance;
+    p->left = old->left;
+    p->right = old->right;
     return p;
 }
 
@@ -848,13 +851,14 @@ int db_put_tree_common(DbTableCommon *tb, TreeDbTerm **root, Eterm obj,
 	    state = 1;
             INC_NITEMS(((DbTable*)tb));
             new_node = new_dbterm(tb, obj);
-            new_node->compress = 1;
+            new_node->compress = tb->compress;
             new_node->balance = 0;
             new_node->left = NULL;
             new_node->right = NULL;
             if (tb->type & DB_SEQ_LOCK){
                 ERTS_THR_WRITE_MEMORY_BARRIER;
             }
+            //erts_printf("INSERTING NEW TERM %T\n", make_tuple(new_node->dbterm.tpl));
 	    *this = new_node;
 	    break;
 	} else if ((c = cmp_key(tb, key, *this)) < 0) {
@@ -867,7 +871,13 @@ int db_put_tree_common(DbTableCommon *tb, TreeDbTerm **root, Eterm obj,
 	    tstack[tpos++] = this;
 	    this = &((*this)->right);
 	} else if (!key_clash_fail) { /* Equal key and this is a set, replace. */
-            TreeDbTerm * new_node = replace_dbterm(tb, *this, obj);
+            TreeDbTerm * new_node;
+            if (/*(tb->common.type & DB_SEQ_LOCK) &&*/
+                !tb->compress &&
+                EQ(make_tuple((*this)->dbterm.tpl), obj)) {
+                return DB_ERROR_NONE;
+            }
+            new_node = replace_dbterm(tb, *this, obj);
             if (tb->type & DB_SEQ_LOCK){
                 ERTS_THR_WRITE_MEMORY_BARRIER;
             }

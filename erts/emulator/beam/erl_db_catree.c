@@ -1711,9 +1711,9 @@ static int db_get_catree(Process *p, DbTable *tbl, Eterm key, Eterm *ret)
     if(tb->common.type & DB_SEQ_LOCK) {
         node = find_seqlock_valid_base_node(tb, key, &seq_nr);
     } else {
-    take_rlock:
         node = find_rlock_valid_base_node(tb, key);
     }
+ after_take_rlock:
     result = db_get_tree_common(p, &tb->common,
                                 node->u.base.root,
                                 key, ret, NULL);
@@ -1721,7 +1721,12 @@ static int db_get_catree(Process *p, DbTable *tbl, Eterm key, Eterm *ret)
         runlock_base_node(node, tb);
     } else if (!erts_rwmtx_validate_seq_nr(&node->u.base.lock, seq_nr)){
         seq_nr = -1;
-        goto take_rlock;
+        //erts_printf("F\n");
+        node = find_rlock_valid_base_node(tb, key);
+        BASE_NODE_STAT_ADD(node, ERL_DB_CATREE_LOCK_FAILURE_CONTRIBUTION);
+        goto after_take_rlock;
+    } else {
+        //erts_printf("S\n");
     }
     return result;
 }
