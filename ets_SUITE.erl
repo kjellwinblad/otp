@@ -6906,20 +6906,20 @@ stdout_notify_res(ResultPath, LatestResultPath) ->
 throughput_benchmark() ->
     throughput_benchmark(
       #ets_throughput_bench_config{
-         benchmark_duration_ms = 5000,
-         recover_time_ms = 1000,
-         thread_counts = [1,2,4,8,16,32,63],
+         benchmark_duration_ms = 15000,
+         recover_time_ms = 5000,
+         thread_counts = [1,2,4,8,16,32,63,64],
          key_ranges = [1000000],
          table_types =
              [
               [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}, {seq_lock, true}],
               [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, false}, {seq_lock, true}],
               [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}],
-              [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, false}],
-              [set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}, {seq_lock, true}],
-              [set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, false}, {seq_lock, true}],
-              [set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}],
-              [set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, false}]
+              [ordered_set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, false}]%,
+              %[set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}, {seq_lock, true}],
+              %[set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, false}, {seq_lock, true}],
+              %[set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, true}],
+              %[set, public, {decentralized_counters, true}, {write_concurrency, true}, {read_concurrency, false}]
              ],
          scenarios =
               [
