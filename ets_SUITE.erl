@@ -7188,7 +7188,7 @@ throughput_benchmark(
                 Nobj = ets:info(Table, size),
                 SafeFixTableIfRequired(Table, Scenario, true),
                 ParentPid = self(),
-                io:format("~nSAFE FIXTAB ~p ~n", [ ets:info(Table, fixed)]),
+		%%                io:format("~nSAFE FIXTAB ~p ~n", [ ets:info(Table, fixed)]),
                 Worker =
                     fun() ->
                             receive start -> ok end,
@@ -7208,7 +7208,7 @@ throughput_benchmark(
                                            end
                                    end, 0, ChildPids),
                 SafeFixTableIfRequired(Table, Scenario, false),
-                io:format(" AFTER SAFE FIXTAB ~p ~n", [ ets:info(Table, fixed)]),
+                %% io:format(" AFTER SAFE FIXTAB ~p ~n", [ ets:info(Table, fixed)]),
                 ets:delete(Table),
                 TotalWorksDone
         end,

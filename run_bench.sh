@@ -35,4 +35,4 @@ erl +sbt s -noshell -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
 #erl +sbt s -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
 
 # Same as db (fills one chip at a time)
-erl +sbt tnnps -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
+erl +sbt tnnps -noshell -eval "ets_SUITE:throughput_benchmark(),erlang:halt()"
