@@ -11933,6 +11933,7 @@ erl_create_process(Process* parent, /* Parent of process (default group leader).
     p->sig_inq.len = 0;
     p->sig_inq.nmsigs.next = NULL;
     p->sig_inq.nmsigs.last = NULL;
+    erts_atomic_init_nob(&p->sig_inq_buffers, (Uint)NULL);
 #ifdef ERTS_PROC_SIG_HARD_DEBUG
     p->sig_inq.may_contain_heap_terms = 0;
 #endif
@@ -12437,6 +12438,7 @@ void erts_init_empty_process(Process *p)
     p->sig_inq.len = 0;
     p->sig_inq.nmsigs.next = NULL;
     p->sig_inq.nmsigs.last = NULL;
+    erts_atomic_init_nob(&p->sig_inq_buffers, (Uint)NULL);
 #ifdef ERTS_PROC_SIG_HARD_DEBUG
     p->sig_inq.may_contain_heap_terms = 0;
 #endif

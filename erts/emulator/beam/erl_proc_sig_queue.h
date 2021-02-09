@@ -226,6 +226,14 @@ void erl_proc_sig_hdbg_chk_recv_marker_block(struct process *c_p);
 
 #include "erl_process.h"
 #include "erl_bif_unique.h"
+void lock_concurrent_queue_slot(ErtsSignalInQueueBuffer* slot);
+void unlock_concurrent_queue_slot(ErtsSignalInQueueBuffer* slot);
+Sint erts_proc_sig_queue_flush_buffers(Process* p);
+void erts_proc_sig_queue_kill_buffers_and_deinstall(Process* p);
+void erts_proc_sig_queue_lock_buffer(ErtsSignalInQueueBuffer* slot);
+void erts_proc_sig_queue_unlock_buffer(ErtsSignalInQueueBuffer* slot);
+void erts_proc_sig_queue_install_buffers(Process* p);
+void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc);
 
 #define ERTS_SIG_Q_OP_BITS      8                      
 #define ERTS_SIG_Q_OP_SHIFT     0
@@ -1370,7 +1378,7 @@ erts_proc_sig_fetch(Process *proc)
 {
     Sint res = 0;
     ErtsSignal *sig;
-
+    Sint nr_of_nonempty_buffers;
     ERTS_LC_ASSERT(ERTS_PROC_IS_EXITING(proc)
                    || ((erts_proc_lc_my_proc_locks(proc)
                         & (ERTS_PROC_LOCK_MAIN
@@ -1381,6 +1389,11 @@ erts_proc_sig_fetch(Process *proc)
     ERTS_HDBG_CHECK_SIGNAL_IN_QUEUE(proc);
     ERTS_HDBG_CHECK_SIGNAL_PRIV_QUEUE(proc, !0);
 
+    nr_of_nonempty_buffers = erts_proc_sig_queue_flush_buffers(proc);
+
+    if (nr_of_nonempty_buffers == 0 || nr_of_nonempty_buffers == 1) {
+        /* TODO deinstall queue */
+    }
     sig = (ErtsSignal *) proc->sig_inq.first;
     if (sig) {
         if (ERTS_LIKELY(sig->common.tag != ERTS_PROC_SIG_MSGQ_LEN_OFFS_MARK))

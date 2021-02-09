@@ -367,6 +367,28 @@ queue_messages(Process* receiver,
     ERTS_LC_ASSERT((erts_proc_lc_my_proc_locks(receiver) & ERTS_PROC_LOCK_MSGQ)
                    == (receiver_locks & ERTS_PROC_LOCK_MSGQ));
 
+    {
+        ErtsSignalInQueueBufferArray* buffers;
+        if (last == &first->next &&
+            NULL != (buffers = (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&receiver->sig_inq_buffers))) {
+            // TODO hash to correct buffer
+            ErtsSignalInQueueBuffer* buffer = &buffers->slots[0];
+            erts_proc_sig_queue_lock_buffer(buffer);
+            if (buffer->alive) {
+                /* Insert into buffer */
+                ASSERT(ERTS_SIG_IS_MSG(first));
+                *buffer->queue.last = first;
+                buffer->queue.last = &first->next;
+                buffer->queue.len++;
+                erts_proc_sig_queue_unlock_buffer(buffer);
+                /* We are done */
+                return;
+            }
+            /* Continue as normal if buffer is dead */
+            erts_proc_sig_queue_unlock_buffer(buffer);
+        }
+    }
+
     if (!(receiver_locks & ERTS_PROC_LOCK_MSGQ)) {
         erts_proc_lock(receiver, ERTS_PROC_LOCK_MSGQ);
 	locked_msgq = 1;

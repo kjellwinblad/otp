@@ -6859,3 +6859,109 @@ erts_proc_sig_hdbg_check_in_queue(Process *p, char *what, char *file, int line)
 }
 
 #endif /* ERTS_PROC_SIG_HARD_DEBUG */
+
+
+void erts_proc_sig_queue_lock_buffer(ErtsSignalInQueueBuffer* slot) {
+   while(1) {
+        Uint lock_val = erts_atomic_read_acqb(&slot->lock);
+        // Spin while taking
+        if(lock_val == 0 && erts_atomic_cmpxchg_acqb(&slot->lock, 1, 0) == 0) {
+            break;
+        }
+    }
+}
+
+void erts_proc_sig_queue_unlock_buffer(ErtsSignalInQueueBuffer* slot) {
+    erts_atomic_set_relb(&slot->lock, 0);
+}
+
+Sint erts_proc_sig_queue_flush_buffers(Process* proc) {
+    Uint i;
+    erts_aint32_t state;
+    ErtsSignalInQueueBufferArray* buffers =
+        (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&proc->sig_inq_buffers);
+    Sint nr_of_nonempty_buffers = 0;
+    ERTS_LC_ASSERT(ERTS_PROC_IS_EXITING(proc)
+                   || ((erts_proc_lc_my_proc_locks(proc)
+                        & (ERTS_PROC_LOCK_MAIN
+                           | ERTS_PROC_LOCK_MSGQ))
+                       == (ERTS_PROC_LOCK_MAIN
+                           | ERTS_PROC_LOCK_MSGQ)));
+    if (buffers == NULL) {
+        return -1;
+    }
+    state = erts_atomic32_read_nob(&proc->state);
+    for (i = 0; i < buffers->no_slots; i++) {
+        erts_proc_sig_queue_lock_buffer(&buffers->slots[i]);
+        if (erts_enqueue_signals(proc,
+                                 buffers->slots[i].queue.first,
+                                 buffers->slots[i].queue.last,
+                                 NULL,
+                                 buffers->slots[i].queue.len,
+                                 state)) {
+            nr_of_nonempty_buffers++;
+        }
+        buffers->slots[i].queue.first = NULL;
+        buffers->slots[i].queue.last = &buffers->slots[i].queue.first;
+        buffers->slots[i].queue.len = 0;
+        buffers->slots[i].queue.nmsigs.next = NULL;
+        buffers->slots[i].queue.nmsigs.last = NULL;
+        erts_proc_sig_queue_unlock_buffer(&buffers->slots[i]);
+    }
+    return nr_of_nonempty_buffers;
+}
+
+void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc) {
+   Uint i;
+    erts_aint32_t state;
+    ErtsSignalInQueueBufferArray* buffers =
+        (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&proc->sig_inq_buffers);
+    erts_atomic_set_nob(&proc->sig_inq_buffers, (Uint)NULL);
+    ERTS_LC_ASSERT(ERTS_PROC_IS_EXITING(proc)
+                   || ((erts_proc_lc_my_proc_locks(proc)
+                        & (ERTS_PROC_LOCK_MAIN
+                           | ERTS_PROC_LOCK_MSGQ))
+                       == (ERTS_PROC_LOCK_MAIN
+                           | ERTS_PROC_LOCK_MSGQ)));
+    if (buffers == NULL) {
+        return;
+    }
+    state = erts_atomic32_read_nob(&proc->state);
+    for (i = 0; i < buffers->no_slots; i++) {
+        erts_proc_sig_queue_lock_buffer(&buffers->slots[i]);
+        erts_enqueue_signals(proc,
+                             buffers->slots[i].queue.first,
+                             buffers->slots[i].queue.last,
+                             NULL,
+                             buffers->slots[i].queue.len,
+                             state);
+        buffers->slots[i].queue.first = NULL;
+        buffers->slots[i].queue.last = &buffers->slots[i].queue.first;
+        buffers->slots[i].queue.len = 0;
+        buffers->slots[i].queue.nmsigs.next = NULL;
+        buffers->slots[i].queue.nmsigs.last = NULL;
+        buffers->slots[i].alive = 0;
+        erts_proc_sig_queue_unlock_buffer(&buffers->slots[i]);
+    }
+}
+
+void erts_proc_sig_queue_install_buffers(Process* p) {
+    int i;
+    ErtsSignalInQueueBufferArray* buffers;
+    //TODO change alloc type
+    buffers = erts_alloc(ERTS_ALC_T_DB_SEG,
+                         sizeof(ErtsSignalInQueueBufferArray));
+    //TODO use configurable variable
+    buffers->no_slots = 16;
+    /* Initiallize  slots */
+    for(i = 0; i < buffers->no_slots; i++) {
+        buffers->slots[i].alive = 1;
+        erts_atomic_init_mb(&buffers->slots[i].lock, 0);
+        buffers->slots[i].queue.first = NULL;
+        buffers->slots[i].queue.last = &buffers->slots[i].queue.first;
+        buffers->slots[i].queue.len = 0;
+        buffers->slots[i].queue.nmsigs.next = NULL;
+        buffers->slots[i].queue.nmsigs.last = NULL;
+    }
+    erts_atomic_set_mb(&p->sig_inq_buffers, (Uint)buffers);
+}

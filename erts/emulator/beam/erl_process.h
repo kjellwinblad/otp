@@ -1098,6 +1098,7 @@ struct process {
     erts_atomic32_t dirty_state; /* Process dirty state flags (see ERTS_PDSFLG_*) */
 
     ErtsSignalInQueue sig_inq;
+    erts_atomic_t sig_inq_buffers;
     ErlTraceMessageQueue *trace_msg_q;
     erts_proc_lock_t lock;
     ErtsSchedulerData *scheduler_data;

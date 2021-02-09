@@ -341,6 +341,18 @@ typedef struct {
 #endif
 } ErtsSignalInQueue;
 
+typedef struct {
+    erts_atomic_t lock;
+    int alive;
+    ErtsSignalInQueue queue;
+} ErtsSignalInQueueBuffer;
+
+typedef struct {
+    Uint no_slots;
+    // TODO make this dynamic
+    ErtsSignalInQueueBuffer slots[128];
+} ErtsSignalInQueueBufferArray;
+
 typedef struct erl_trace_message_queue__ {
     struct erl_trace_message_queue__ *next; /* point to the next receiver */
     Eterm receiver;
