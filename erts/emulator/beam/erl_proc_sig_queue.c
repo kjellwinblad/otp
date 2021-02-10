@@ -481,7 +481,8 @@ static ERTS_INLINE erts_aint32_t
 enqueue_signals(Process *rp, ErtsMessage *first,
                 ErtsMessage **last, ErtsMessage **last_next,
                 Uint num_msgs,
-                erts_aint32_t in_state)
+                erts_aint32_t in_state,
+                int flush_buffers)
 {
     erts_aint32_t state = in_state;
     ErtsMessage **this = rp->sig_inq.last;
@@ -489,6 +490,9 @@ enqueue_signals(Process *rp, ErtsMessage *first,
     ERTS_HDBG_CHECK_SIGNAL_IN_QUEUE(rp);
 
     ASSERT(!*this);
+    if (flush_buffers) {
+        erts_proc_sig_queue_flush_buffers(rp);
+    }
     *this = first;
     rp->sig_inq.last = last;
 
@@ -549,7 +553,16 @@ erts_aint32_t erts_enqueue_signals(Process *rp, ErtsMessage *first,
                                    Uint num_msgs,
                                    erts_aint32_t in_state)
 {
-    return enqueue_signals(rp, first, last, last_next, num_msgs, in_state);
+    return enqueue_signals(rp, first, last, last_next, num_msgs, in_state, in_state & ERTS_PSFLG_OFF_HEAP_MSGQ);
+}
+
+erts_aint32_t erts_enqueue_signals_optional_flush(Process *rp, ErtsMessage *first,
+                                                  ErtsMessage **last, ErtsMessage **last_next,
+                                                  Uint num_msgs,
+                                                  erts_aint32_t in_state,
+                                                  int flush_buffers)
+{
+    return enqueue_signals(rp, first, last, last_next, num_msgs, in_state, flush_buffers);
 }
 
 void
@@ -689,7 +702,7 @@ first_last_done:
     if (ERTS_PSFLG_FREE & state)
         res = 0;
     else {
-        state = enqueue_signals(rp, first, &last->next, last_next, 0, state);
+        state = enqueue_signals(rp, first, &last->next, last_next, 0, state, 1);
         if (ERTS_UNLIKELY(op == ERTS_SIG_Q_OP_PROCESS_INFO))
             check_push_msgq_len_offs_marker(rp, sig);
         res = !0;
@@ -6862,16 +6875,20 @@ erts_proc_sig_hdbg_check_in_queue(Process *p, char *what, char *file, int line)
 
 
 void erts_proc_sig_queue_lock_buffer(ErtsSignalInQueueBuffer* slot) {
-   while(1) {
+    //erts_printf("start lock slot %p\n", slot);
+    while(1) {
         Uint lock_val = erts_atomic_read_acqb(&slot->lock);
         // Spin while taking
+        //erts_printf("lock val %lu\n", lock_val);
         if(lock_val == 0 && erts_atomic_cmpxchg_acqb(&slot->lock, 1, 0) == 0) {
             break;
         }
     }
+    //erts_printf("end lock slot %p\n", slot);
 }
 
 void erts_proc_sig_queue_unlock_buffer(ErtsSignalInQueueBuffer* slot) {
+    //erts_printf("UNLOCK SLOT %p\n", slot);
     erts_atomic_set_relb(&slot->lock, 0);
 }
 
@@ -6890,15 +6907,20 @@ Sint erts_proc_sig_queue_flush_buffers(Process* proc) {
     if (buffers == NULL) {
         return -1;
     }
+    //erts_printf("FLUSH BUFFERS\n");
     state = erts_atomic32_read_nob(&proc->state);
     for (i = 0; i < buffers->no_slots; i++) {
+        //erts_printf("FLUSH BUFFER %lu\n", i);
         erts_proc_sig_queue_lock_buffer(&buffers->slots[i]);
-        if (erts_enqueue_signals(proc,
-                                 buffers->slots[i].queue.first,
-                                 buffers->slots[i].queue.last,
-                                 NULL,
-                                 buffers->slots[i].queue.len,
-                                 state)) {
+        //erts_printf("GOT LOCK %lu\n", i);
+        if (buffers->slots[i].queue.len > 0 &&
+            enqueue_signals(proc,
+                            buffers->slots[i].queue.first,
+                            buffers->slots[i].queue.last,
+                            NULL,
+                            buffers->slots[i].queue.len,
+                            state,
+                            0)) {
             nr_of_nonempty_buffers++;
         }
         buffers->slots[i].queue.first = NULL;
@@ -6908,11 +6930,12 @@ Sint erts_proc_sig_queue_flush_buffers(Process* proc) {
         buffers->slots[i].queue.nmsigs.last = NULL;
         erts_proc_sig_queue_unlock_buffer(&buffers->slots[i]);
     }
+    //erts_printf("FLUSH BUFFERS DONE\n");
     return nr_of_nonempty_buffers;
 }
 
 void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc) {
-   Uint i;
+    Uint i;
     erts_aint32_t state;
     ErtsSignalInQueueBufferArray* buffers =
         (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&proc->sig_inq_buffers);
@@ -6926,15 +6949,19 @@ void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc) {
     if (buffers == NULL) {
         return;
     }
+    //erts_printf("DEINSTALL BUFFERS\n");
     state = erts_atomic32_read_nob(&proc->state);
     for (i = 0; i < buffers->no_slots; i++) {
         erts_proc_sig_queue_lock_buffer(&buffers->slots[i]);
-        erts_enqueue_signals(proc,
-                             buffers->slots[i].queue.first,
-                             buffers->slots[i].queue.last,
-                             NULL,
-                             buffers->slots[i].queue.len,
-                             state);
+        if (buffers->slots[i].queue.len > 0) {
+            enqueue_signals(proc,
+                            buffers->slots[i].queue.first,
+                            buffers->slots[i].queue.last,
+                            NULL,
+                            buffers->slots[i].queue.len,
+                            state,
+                            0);
+        }
         buffers->slots[i].queue.first = NULL;
         buffers->slots[i].queue.last = &buffers->slots[i].queue.first;
         buffers->slots[i].queue.len = 0;
@@ -6943,6 +6970,8 @@ void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc) {
         buffers->slots[i].alive = 0;
         erts_proc_sig_queue_unlock_buffer(&buffers->slots[i]);
     }
+    // TODO SCHEDULE DEALlOC
+    //erts_printf("DEINSTALL BUFFERS DONE\n");
 }
 
 void erts_proc_sig_queue_install_buffers(Process* p) {

@@ -143,20 +143,21 @@ throughput_benchmark(
                 ProbHelpTab = CalculateOpsProbHelpTab(Scenario, 0),
                 ParentPid = self(),
                 ReceiveFun =
-                    fun ReceiveFun(NrOfStops) when NrOfStops =:= NrOfProcs ->
-                            ParentPid ! done_nothing_more_to_receive;
-                        ReceiveFun(NrOfStops) ->
+                    fun ReceiveFun(NrOfStops, ReceiveCount) when NrOfStops =:= NrOfProcs ->
+                            ParentPid ! {done_nothing_more_to_receive, ReceiveCount};
+                        ReceiveFun(NrOfStops, ReceiveCount) ->
                             receive
                                 Msg ->
                                     case Msg of
                                         stop ->
-                                            ReceiveFun(NrOfStops + 1);
+                                            ReceiveFun(NrOfStops + 1, ReceiveCount);
                                         _ ->
-                                            ReceiveFun(NrOfStops)
+                                            ReceiveFun(NrOfStops, ReceiveCount + 1)
                                     end
                             end
                     end,
-                Receiver = spawn_link(fun() -> ReceiveFun(0) end),
+                Receiver = spawn_opt(fun() -> ReceiveFun(0, 0) end,
+                                     [{message_queue_data, off_heap}]),
                 Worker =
                     fun() ->
                             receive start -> ok end,
@@ -182,7 +183,11 @@ throughput_benchmark(
                     timer:tc(
                       fun() ->
                               receive
-                                  done_nothing_more_to_receive -> ok
+                                  {done_nothing_more_to_receive, ReceiveCount} ->
+                                      %% Sanity check
+                                      erlang:display({ReceiveCount, TotalWorksDone}),
+                                      ReceiveCount = TotalWorksDone,
+                                      ok
                               end
                       end),
                 {Duration + (TimeAfterSends div 1000), TotalWorksDone}

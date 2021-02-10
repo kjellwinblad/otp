@@ -1018,6 +1018,28 @@ erts_enqueue_signals(Process *rp, ErtsMessage *first,
                      ErtsMessage **last, ErtsMessage **last_next,
                      Uint msg_cnt,
                      erts_aint32_t in_state);
+/**
+ * @brief Enqueue list of signals on process.
+ *
+ * Message queue must be locked on receiving process.
+ *
+ * @param rp                Receiving process.
+ * @param first             First signal in list.
+ * @param last              Last signal in list.
+ * @param last_next         Pointer to next-pointer to last non-message signal
+ *                          or NULL if no non-message signal after 'first'.
+ * @param msg_cnt           Number of message signals in list.
+ * @param in_state          'state' of rp.
+ * @param flush_buffers     0 if buffers should not be flushed
+ *
+ * @return                  'state' of rp.
+ */
+erts_aint32_t
+erts_enqueue_signals_optional_flush(Process *rp, ErtsMessage *first,
+                                    ErtsMessage **last, ErtsMessage **last_next,
+                                    Uint msg_cnt,
+                                    erts_aint32_t in_state,
+                                    int flush_buffers);
 
 /**
  *
