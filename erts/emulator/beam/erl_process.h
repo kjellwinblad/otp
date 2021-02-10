@@ -1096,7 +1096,7 @@ struct process {
 
     erts_atomic32_t state;  /* Process state flags (see ERTS_PSFLG_*) */
     erts_atomic32_t dirty_state; /* Process dirty state flags (see ERTS_PDSFLG_*) */
-
+    Uint sig_inq_contention_counter;
     ErtsSignalInQueue sig_inq;
     erts_atomic_t sig_inq_buffers;
     ErlTraceMessageQueue *trace_msg_q;

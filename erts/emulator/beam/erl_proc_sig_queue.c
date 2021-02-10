@@ -6934,12 +6934,18 @@ Sint erts_proc_sig_queue_flush_buffers(Process* proc) {
     return nr_of_nonempty_buffers;
 }
 
+static void do_free_erts_signal_in_queue_buffer_array(void *vptr)
+{
+    ErtsSignalInQueueBufferArray* buffers = vptr;
+    //erts_printf("CLEANUP ARRAY\n");
+    erts_free(ERTS_ALC_T_DB_SEG, buffers);
+}
+
 void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc) {
     Uint i;
     erts_aint32_t state;
     ErtsSignalInQueueBufferArray* buffers =
         (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&proc->sig_inq_buffers);
-    erts_atomic_set_nob(&proc->sig_inq_buffers, (Uint)NULL);
     ERTS_LC_ASSERT(ERTS_PROC_IS_EXITING(proc)
                    || ((erts_proc_lc_my_proc_locks(proc)
                         & (ERTS_PROC_LOCK_MAIN
@@ -6949,6 +6955,8 @@ void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc) {
     if (buffers == NULL) {
         return;
     }
+    proc->sig_inq_contention_counter = 0;
+    erts_atomic_set_nob(&proc->sig_inq_buffers, (Uint)NULL);
     //erts_printf("DEINSTALL BUFFERS\n");
     state = erts_atomic32_read_nob(&proc->state);
     for (i = 0; i < buffers->no_slots; i++) {
@@ -6972,6 +6980,10 @@ void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc) {
     }
     // TODO SCHEDULE DEALlOC
     //erts_printf("DEINSTALL BUFFERS DONE\n");
+    erts_schedule_thr_prgr_later_cleanup_op(do_free_erts_signal_in_queue_buffer_array,
+                                            buffers,
+                                            &buffers->free_item,
+                                            sizeof(ErtsSignalInQueueBufferArray));
 }
 
 void erts_proc_sig_queue_install_buffers(Process* p) {
@@ -6981,7 +6993,8 @@ void erts_proc_sig_queue_install_buffers(Process* p) {
     buffers = erts_alloc(ERTS_ALC_T_DB_SEG,
                          sizeof(ErtsSignalInQueueBufferArray));
     //TODO use configurable variable
-    buffers->no_slots = 16;
+    buffers->no_slots = erts_no_schedulers;
+    //erts_printf("no slots: %lu", buffers->no_slots);
     /* Initiallize  slots */
     for(i = 0; i < buffers->no_slots; i++) {
         buffers->slots[i].alive = 1;

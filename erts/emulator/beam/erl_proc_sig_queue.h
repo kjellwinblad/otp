@@ -1412,9 +1412,10 @@ erts_proc_sig_fetch(Process *proc)
     ERTS_HDBG_CHECK_SIGNAL_PRIV_QUEUE(proc, !0);
 
     nr_of_nonempty_buffers = erts_proc_sig_queue_flush_buffers(proc);
-
+    //if (nr_of_nonempty_buffers != -1)
+    //    erts_printf("NUMBER OF NONEMPTY = %li\n", nr_of_nonempty_buffers);
     if (nr_of_nonempty_buffers == 0 || nr_of_nonempty_buffers == 1) {
-        /* TODO deinstall queue */
+        erts_proc_sig_queue_deinstall_buffers_and_flush(proc);
     }
     sig = (ErtsSignal *) proc->sig_inq.first;
     if (sig) {

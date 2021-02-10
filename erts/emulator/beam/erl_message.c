@@ -343,7 +343,8 @@ erts_queue_dist_message(Process *rcvr,
 
 /* Add messages last in message queue */
 static void
-queue_messages(Process* receiver,
+queue_messages(Process* sender, /* is NULL if the sender is not a local process */
+               Process* receiver,
                ErtsProcLocks receiver_locks,
                ErtsMessage* first,
                ErtsMessage** last,
@@ -368,10 +369,12 @@ queue_messages(Process* receiver,
                    == (receiver_locks & ERTS_PROC_LOCK_MSGQ));
 
     //erts_printf("queue_messages START\n");
-    if (last == &first->next &&
+    if (sender != NULL &&
+        last == &first->next &&
         NULL != (buffers = (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&receiver->sig_inq_buffers))) {
-        // TODO hash to correct buffer
-        ErtsSignalInQueueBuffer* buffer = &buffers->slots[0];
+        Uint to_hash = internal_pid_number(sender->common.id);
+        ErtsSignalInQueueBuffer* buffer = &buffers->slots[to_hash % buffers->no_slots];
+        /*erts_printf("SLOT %lu\n", to_hash % buffers->no_slots);*/
         erts_proc_sig_queue_lock_buffer(buffer);
         if (buffer->alive) {
             /* Insert into buffer */
@@ -382,7 +385,7 @@ queue_messages(Process* receiver,
             erts_proc_sig_queue_unlock_buffer(buffer);
             erts_proc_notify_new_message(receiver, receiver_locks);
             /* We are done */
-            erts_printf("queue_message in buffer!!!\n");
+            //erts_printf("queue_message in buffer!!!\n");
             return;
         }
         /* Continue as normal if buffer is dead */
@@ -390,18 +393,28 @@ queue_messages(Process* receiver,
     }
 
 
-    if (!(receiver_locks & ERTS_PROC_LOCK_MSGQ)) {
+    /*if (!(receiver_locks & ERTS_PROC_LOCK_MSGQ)) {
         erts_proc_lock(receiver, ERTS_PROC_LOCK_MSGQ);
+	locked_msgq = 1;
+    }*/
+    if (!(receiver_locks & ERTS_PROC_LOCK_MSGQ)) {
+        if(erts_proc_trylock(receiver, ERTS_PROC_LOCK_MSGQ)){
+            erts_proc_lock(receiver, ERTS_PROC_LOCK_MSGQ);
+            receiver->sig_inq_contention_counter += 1;
+        } else if(receiver->sig_inq_contention_counter > 0) {
+            receiver->sig_inq_contention_counter -= 1;
+        }
 	locked_msgq = 1;
     }
 
     state = erts_atomic32_read_nob(&receiver->state);
 
-    if (state & ERTS_PSFLG_OFF_HEAP_MSGQ &&
+    if (receiver->sig_inq_contention_counter > ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_THRESHOLD &&
+        state & ERTS_PSFLG_OFF_HEAP_MSGQ &&
         (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&receiver->sig_inq_buffers) == NULL) {
-        erts_printf("OFFHEAP MSGQ INSTALL\n");
+        //erts_printf("OFFHEAP MSGQ INSTALL\n");
         erts_proc_sig_queue_install_buffers(receiver);
-        erts_printf("OFFHEAP MSGQ INSTALL DONE\n");
+        //erts_printf("OFFHEAP MSGQ INSTALL DONE\n");
     }
 
     if (state & ERTS_PSFLG_EXITING) {
@@ -479,7 +492,7 @@ erts_queue_message(Process* receiver, ErtsProcLocks receiver_locks,
     ERL_MESSAGE_TERM(mp) = msg;
     ERL_MESSAGE_FROM(mp) = from;
     ERL_MESSAGE_TOKEN(mp) = am_undefined;
-    queue_messages(receiver, receiver_locks, mp, &mp->next, 1);
+    queue_messages(NULL, receiver, receiver_locks, mp, &mp->next, 1);
 }
 
 /**
@@ -496,7 +509,7 @@ erts_queue_message_token(Process* receiver, ErtsProcLocks receiver_locks,
     ERL_MESSAGE_TERM(mp) = msg;
     ERL_MESSAGE_FROM(mp) = from;
     ERL_MESSAGE_TOKEN(mp) = token;
-    queue_messages(receiver, receiver_locks, mp, &mp->next, 1);
+    queue_messages(NULL, receiver, receiver_locks, mp, &mp->next, 1);
 }
 
 
@@ -517,7 +530,7 @@ erts_queue_proc_message(Process* sender,
 {
     ERL_MESSAGE_TERM(mp) = msg;
     ERL_MESSAGE_FROM(mp) = sender->common.id;
-    queue_messages(receiver, receiver_locks,
+    queue_messages(sender, receiver, receiver_locks,
                    prepend_pending_sig_maybe(sender, receiver, mp),
                    &mp->next, 1);
 }
@@ -528,7 +541,7 @@ erts_queue_proc_messages(Process* sender,
                          Process* receiver, ErtsProcLocks receiver_locks,
                          ErtsMessage* first, ErtsMessage** last, Uint len)
 {
-    queue_messages(receiver, receiver_locks,
+    queue_messages(sender, receiver, receiver_locks,
                    prepend_pending_sig_maybe(sender, receiver, first),
                    last, len);
 }

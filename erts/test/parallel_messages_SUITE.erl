@@ -237,7 +237,7 @@ throughput_benchmark(
                  VersionString =  erlang:system_info(system_version),
                  case re:run(VersionString, "\\[(source\\-[^\\]]+)\\]") of
                      {match, [_, {StartPos, Length}]} ->
-                         string:sub_string(VersionString, StartPos, StartPos + Length);
+                         string:slice(VersionString, StartPos, Length);
                      _ ->
                          erlang:system_info(otp_release)
                  end

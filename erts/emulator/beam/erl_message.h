@@ -33,6 +33,8 @@
 #define ERTS_MSG_COPY_WORDS_PER_REDUCTION 64
 #endif
 
+#define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_THRESHOLD 100
+
 struct proc_bin;
 struct external_thing_;
 
@@ -345,9 +347,12 @@ typedef struct {
     erts_atomic_t lock;
     int alive;
     ErtsSignalInQueue queue;
+    byte pad[ERTS_CACHE_LINE_SIZE -
+             (sizeof(erts_atomic_t) - sizeof(int) - sizeof(ErtsSignalInQueue)) % ERTS_CACHE_LINE_SIZE];
 } ErtsSignalInQueueBuffer;
 
 typedef struct {
+    ErtsThrPrgrLaterOp free_item;
     Uint no_slots;
     // TODO make this dynamic
     ErtsSignalInQueueBuffer slots[128];
