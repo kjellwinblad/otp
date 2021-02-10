@@ -185,7 +185,6 @@ throughput_benchmark(
                               receive
                                   {done_nothing_more_to_receive, ReceiveCount} ->
                                       %% Sanity check
-                                      erlang:display({ReceiveCount, TotalWorksDone}),
                                       ReceiveCount = TotalWorksDone,
                                       ok
                               end
