@@ -349,7 +349,7 @@ typedef struct {
     int alive;
     ErtsSignalInQueue queue;
     byte pad[ERTS_CACHE_LINE_SIZE -
-             (sizeof(erts_atomic_t) - sizeof(int) - sizeof(ErtsSignalInQueue)) % ERTS_CACHE_LINE_SIZE];
+             (sizeof(erts_mtx_t) - sizeof(int) - sizeof(ErtsSignalInQueue)) % ERTS_CACHE_LINE_SIZE];
 } ErtsSignalInQueueBuffer;
 
 typedef struct {
