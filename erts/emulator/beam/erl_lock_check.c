@@ -167,7 +167,8 @@ static erts_lc_lock_order_t erts_lock_order[] = {
     {	"erts_alloc_hard_debug",		NULL			},
     {	"hard_dbg_mseg",		        NULL	                },
     {	"perf", 				NULL			},
-    {	"erts_mmap",				NULL			}
+    {	"erts_mmap",				NULL			},
+    {	"proc_sig_queue_buffer",		"address"		}
 };
 
 #define ERTS_LOCK_ORDER_SIZE \

@@ -344,7 +344,8 @@ typedef struct {
 } ErtsSignalInQueue;
 
 typedef struct {
-    erts_atomic_t lock;
+    /*erts_atomic_t lock;*/
+    erts_mtx_t lock;
     int alive;
     ErtsSignalInQueue queue;
     byte pad[ERTS_CACHE_LINE_SIZE -

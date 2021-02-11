@@ -6875,7 +6875,8 @@ erts_proc_sig_hdbg_check_in_queue(Process *p, char *what, char *file, int line)
 
 
 void erts_proc_sig_queue_lock_buffer(ErtsSignalInQueueBuffer* slot) {
-    //erts_printf("start lock slot %p\n", slot);
+    erts_mtx_lock(&slot->lock);
+    /*//erts_printf("start lock slot %p\n", slot);
     while(1) {
         Uint lock_val = erts_atomic_read_acqb(&slot->lock);
         // Spin while taking
@@ -6885,11 +6886,13 @@ void erts_proc_sig_queue_lock_buffer(ErtsSignalInQueueBuffer* slot) {
         }
     }
     //erts_printf("end lock slot %p\n", slot);
+    */
 }
 
 void erts_proc_sig_queue_unlock_buffer(ErtsSignalInQueueBuffer* slot) {
     //erts_printf("UNLOCK SLOT %p\n", slot);
-    erts_atomic_set_relb(&slot->lock, 0);
+    /*erts_atomic_set_relb(&slot->lock, 0);*/
+    erts_mtx_unlock(&slot->lock);
 }
 
 Sint erts_proc_sig_queue_flush_buffers(Process* proc) {
@@ -6936,9 +6939,12 @@ Sint erts_proc_sig_queue_flush_buffers(Process* proc) {
 
 static void do_free_erts_signal_in_queue_buffer_array(void *vptr)
 {
+    int i;
     ErtsSignalInQueueBufferArray* buffers = vptr;
-    //erts_printf("CLEANUP ARRAY\n");
-    erts_free(ERTS_ALC_T_DB_SEG, buffers);
+    for (i = 0; i < buffers->no_slots; i++) {
+        erts_mtx_destroy(&buffers->slots[i].lock);
+    }
+    erts_free(ERTS_ALC_T_SIGQ_BUFFERS, buffers);
 }
 
 void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc) {
@@ -6990,7 +6996,7 @@ void erts_proc_sig_queue_install_buffers(Process* p) {
     int i;
     ErtsSignalInQueueBufferArray* buffers;
     //TODO change alloc type
-    buffers = erts_alloc(ERTS_ALC_T_DB_SEG,
+    buffers = erts_alloc(ERTS_ALC_T_SIGQ_BUFFERS,
                          sizeof(ErtsSignalInQueueBufferArray));
     //TODO use configurable variable
     buffers->no_slots = erts_no_schedulers;
@@ -6998,7 +7004,8 @@ void erts_proc_sig_queue_install_buffers(Process* p) {
     /* Initiallize  slots */
     for(i = 0; i < buffers->no_slots; i++) {
         buffers->slots[i].alive = 1;
-        erts_atomic_init_mb(&buffers->slots[i].lock, 0);
+        /*erts_atomic_init_mb(&buffers->slots[i].lock, 0);*/
+        erts_mtx_init(&buffers->slots[i].lock, "proc_sig_queue_buffer", NIL, ERTS_LOCK_FLAGS_CATEGORY_PROCESS);
         buffers->slots[i].queue.first = NULL;
         buffers->slots[i].queue.last = &buffers->slots[i].queue.first;
         buffers->slots[i].queue.len = 0;

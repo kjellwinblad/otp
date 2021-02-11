@@ -31,6 +31,7 @@ do_work(WorksDoneSoFar, ProbHelpTab, Operations, Receiver) ->
          thread_counts = not_set,
          nr_of_repeats = 3,
          report_receive_throughput = [false, true],
+         spawn_opts = [[{message_queue_data, off_heap}]],
          scenarios =
              [
               [
@@ -73,6 +74,7 @@ throughput_benchmark(
      thread_counts          = ThreadCountsOpt,
      nr_of_repeats          = NrOfRepeats,
      report_receive_throughput = ReportReceiveThroughputList,
+     spawn_opts = SpawnOptsList,
      scenarios              = Scenarios,
      notify_res_fun         = NotifyResFun,
      print_result_paths_fun = PrintResultPathsFun}) ->
@@ -139,7 +141,7 @@ throughput_benchmark(
     %% Function that runs a benchmark instance and returns the number
     %% of operations that were performed
     RunBenchmark =
-        fun({NrOfProcs, Scenario, Duration}) ->
+        fun({NrOfProcs, Scenario, Duration, SpawnOpts}) ->
                 ProbHelpTab = CalculateOpsProbHelpTab(Scenario, 0),
                 ParentPid = self(),
                 ReceiveFun =
@@ -157,7 +159,7 @@ throughput_benchmark(
                             end
                     end,
                 Receiver = spawn_opt(fun() -> ReceiveFun(0, 0) end,
-                                     [{message_queue_data, off_heap}]),
+                                     SpawnOpts),
                 Worker =
                     fun() ->
                             receive start -> ok end,
@@ -208,11 +210,13 @@ throughput_benchmark(
         fun(ThreadCount,
             Scenario,
             Duration,
-            ReportReceive) ->
+            ReportReceive,
+            SpawnOpts) ->
                 {ReceiveTime, NrOfSends} =
                     RunBenchmarkInSepProcess({ThreadCount,
                                               Scenario,
-                                              Duration}),
+                                              Duration,
+                                              SpawnOpts}),
                 Throughput =
                     case ReportReceive of
                         true ->
@@ -254,36 +258,42 @@ throughput_benchmark(
     PrintData("#BENCHMARK STARTED$~n",[]),
     %% The following loop runs all benchmark scenarios and prints the results (i.e, operations/second)
     lists:foreach(
-      fun(Scenario) ->
+      fun(SpawnOpts) ->
               lists:foreach(
-                fun(ReportReceiveThroughput) ->
-                        PrintData("Scenario: ~s, send_duration=~p ms, ~s$~n",
-                                  [case ReportReceiveThroughput of
-                                       true -> "Receive Throuput";
-                                       false -> "Send Throuput"
-                                   end,
-                                   BenchmarkDurationMs,
-                                   RenderScenario(Scenario, "")]),
+                fun(Scenario) ->
                         lists:foreach(
-                          fun(ThreadCount) ->
-                                  PrintData("; ~w",[ThreadCount])
+                          fun(ReportReceiveThroughput) ->
+                                  PrintData("Scenario: ~s, send_duration=~p ms, ~s, Spawn Options=~p$~n",
+                                            [case ReportReceiveThroughput of
+                                                 true -> "Receive Throuput";
+                                                 false -> "Send Throuput"
+                                             end,
+                                             BenchmarkDurationMs,
+                                             RenderScenario(Scenario, ""),
+                                             SpawnOpts]),
+                                  lists:foreach(
+                                    fun(ThreadCount) ->
+                                            PrintData("; ~w",[ThreadCount])
+                                    end,
+                                    ThreadCounts),
+                                  PrintData("$~n",[]),
+                                  PrintData(Version,[]),
+                                  lists:foreach(
+                                    fun(ThreadCount) ->
+                                            RunBenchmarkAndReport(ThreadCount,
+                                                                  Scenario,
+                                                                  BenchmarkDurationMs,
+                                                                  ReportReceiveThroughput,
+                                                                  SpawnOpts)
+                                    end,
+                                    ThreadCounts),
+                                  PrintData("$~n",[])
                           end,
-                          ThreadCounts),
-                        PrintData("$~n",[]),
-                        PrintData(Version,[]),
-                        lists:foreach(
-                          fun(ThreadCount) ->
-                                  RunBenchmarkAndReport(ThreadCount,
-                                                        Scenario,
-                                                        BenchmarkDurationMs,
-                                                        ReportReceiveThroughput)
-                          end,
-                          ThreadCounts),
-                        PrintData("$~n",[])
+                          ReportReceiveThroughputList)
                 end,
-                ReportReceiveThroughputList)
+                Scenarios)
       end,
-      Scenarios),
+      SpawnOptsList),
     PrintData("~n#BENCHMARK ENDED$~n~n",[]),
     DataDir = filename:join(filename:dirname(code:which(?MODULE)), "parallel_messages_SUITE_data"),
     TemplatePath = filename:join(DataDir, "visualize_throughput.html"),
