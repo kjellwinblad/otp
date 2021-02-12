@@ -368,13 +368,17 @@ queue_messages(Process* sender, /* is NULL if the sender is not a local process 
     ERTS_LC_ASSERT((erts_proc_lc_my_proc_locks(receiver) & ERTS_PROC_LOCK_MSGQ)
                    == (receiver_locks & ERTS_PROC_LOCK_MSGQ));
 
-    //erts_printf("queue_messages START\n");
+    /*erts_printf("queue_messages %p START %d %d %d\n",
+      receiver,
+      sender != NULL,
+      last == &first->next,
+      NULL != (buffers = (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&receiver->sig_inq_buffers)));*/
     if (sender != NULL &&
         last == &first->next &&
         NULL != (buffers = (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&receiver->sig_inq_buffers))) {
         Uint to_hash = internal_pid_number(sender->common.id);
         ErtsSignalInQueueBuffer* buffer = &buffers->slots[to_hash % buffers->no_slots];
-        /*erts_printf("SLOT %lu\n", to_hash % buffers->no_slots);*/
+        //erts_printf("SLOT %lu\n", to_hash % buffers->no_slots);
         erts_proc_sig_queue_lock_buffer(buffer);
         if (buffer->alive) {
             /* Insert into buffer */
@@ -383,9 +387,9 @@ queue_messages(Process* sender, /* is NULL if the sender is not a local process 
             buffer->queue.last = &first->next;
             buffer->queue.len++;
             erts_proc_sig_queue_unlock_buffer(buffer);
+            //erts_printf("queue_message in buffer (NOTIFY RECEIVER)!!\n");
             erts_proc_notify_new_message(receiver, receiver_locks);
             /* We are done */
-            //erts_printf("queue_message in buffer!!!\n");
             return;
         }
         /* Continue as normal if buffer is dead */
@@ -409,14 +413,6 @@ queue_messages(Process* sender, /* is NULL if the sender is not a local process 
 
     state = erts_atomic32_read_nob(&receiver->state);
 
-    if (receiver->sig_inq_contention_counter > ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_THRESHOLD &&
-        state & ERTS_PSFLG_OFF_HEAP_MSGQ &&
-        (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&receiver->sig_inq_buffers) == NULL) {
-        //erts_printf("OFFHEAP MSGQ INSTALL\n");
-        erts_proc_sig_queue_install_buffers(receiver);
-        //erts_printf("OFFHEAP MSGQ INSTALL DONE\n");
-    }
-
     if (state & ERTS_PSFLG_EXITING) {
 	/* Drop message if receiver is exiting or has a pending exit... */
 	if (locked_msgq)
@@ -433,6 +429,8 @@ queue_messages(Process* sender, /* is NULL if the sender is not a local process 
         //erts_printf("queue_messages DONE 1\n");
         return;
     }
+
+    erts_proc_sig_queue_maybe_install_buffers(receiver, state);
 
     if (last == &first->next) {
         ASSERT(len == 1);

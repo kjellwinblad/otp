@@ -33,7 +33,19 @@
 #define ERTS_MSG_COPY_WORDS_PER_REDUCTION 64
 #endif
 
-#define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_THRESHOLD 100
+#ifdef DEBUG
+#define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_INSTALL_LIMIT 1000
+#define ERTS_PROC_SIG_INQ_PARALLEL_ALWAYS_TURN_ON 1
+#define ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE 1
+#define ERTS_PROC_SIG_INQ_PARALLEL_DEINSTALL_LIMIT 0
+#else
+#define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_INSTALL_LIMIT 1000
+#define ERTS_PROC_SIG_INQ_PARALLEL_ALWAYS_TURN_ON 0
+#define ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE 128
+#define ERTS_PROC_SIG_INQ_PARALLEL_DEINSTALL_LIMIT (ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE * 8)
+#endif
+//// TODO
+//100
 
 struct proc_bin;
 struct external_thing_;
@@ -347,6 +359,7 @@ typedef struct {
     /*erts_atomic_t lock;*/
     erts_mtx_t lock;
     int alive;
+    Uint no_signals_flushed_this_round;
     ErtsSignalInQueue queue;
     byte pad[ERTS_CACHE_LINE_SIZE -
              (sizeof(erts_mtx_t) - sizeof(int) - sizeof(ErtsSignalInQueue)) % ERTS_CACHE_LINE_SIZE];
@@ -355,8 +368,11 @@ typedef struct {
 typedef struct {
     ErtsThrPrgrLaterOp free_item;
     Uint no_slots;
-    // TODO make this dynamic
-    ErtsSignalInQueueBuffer slots[128];
+    Uint current_slot;
+    Uint no_buffered_signals;
+    Uint no_of_rounds;
+    /* Dynamic array size */
+    ErtsSignalInQueueBuffer slots[];
 } ErtsSignalInQueueBufferArray;
 
 typedef struct erl_trace_message_queue__ {

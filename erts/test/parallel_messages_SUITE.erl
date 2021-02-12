@@ -1,7 +1,8 @@
 -module(parallel_messages_SUITE).
 
 -export([all/0,
-         test_throughput_benchmark/1]).
+         test_throughput_benchmark/1,
+         throughput_benchmark/0]).
 
 all() -> [test_throughput_benchmark].
 
@@ -263,7 +264,7 @@ throughput_benchmark(
                 fun(Scenario) ->
                         lists:foreach(
                           fun(ReportReceiveThroughput) ->
-                                  PrintData("Scenario: ~s, send_duration=~p ms, ~s, Spawn Options=~p$~n",
+                                  PrintData("Scenario: ~s, send_duration=~w ms, ~s, Spawn Options=~w$~n",
                                             [case ReportReceiveThroughput of
                                                  true -> "Receive Throuput";
                                                  false -> "Send Throuput"

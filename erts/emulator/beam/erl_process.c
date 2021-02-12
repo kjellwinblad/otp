@@ -13613,7 +13613,7 @@ restart:
 
         erts_proc_lock(p, ERTS_PROC_LOCK_MSGQ);
 
-        erts_proc_sig_queue_deinstall_buffers_and_flush(p);
+        erts_proc_sig_queue_flush_and_deinstall_buffers(p);
         erts_proc_sig_fetch(p);
 
         erts_proc_unlock(p, ERTS_PROC_LOCK_MSGQ);

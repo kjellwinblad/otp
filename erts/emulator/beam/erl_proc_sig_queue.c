@@ -209,7 +209,11 @@ static void group_leader_reply(Process *c_p, Eterm to,
                                Eterm ref, int success);
 static int stretch_limit(Process *c_p, ErtsSigRecvTracing *tp,
                          int abs_lim, int *limp);
-
+//static void erts_proc_sig_queue_lock_buffer(ErtsSignalInQueueBuffer* slot);
+//static void erts_proc_sig_queue_unlock_buffer(ErtsSignalInQueueBuffer* slot);
+static Uint erts_proc_sig_queue_incremental_flush_buffer(Process* proc,
+                                                         Uint buffer_index,
+                                                         ErtsSignalInQueueBufferArray* buffers);
 #ifdef ERTS_PROC_SIG_HARD_DEBUG
 #define ERTS_PROC_SIG_HDBG_PRIV_CHKQ(P, T, NMN)                 \
     do {                                                        \
@@ -6895,46 +6899,173 @@ void erts_proc_sig_queue_unlock_buffer(ErtsSignalInQueueBuffer* slot) {
     erts_mtx_unlock(&slot->lock);
 }
 
-Sint erts_proc_sig_queue_flush_buffers(Process* proc) {
+
+static Uint erts_proc_sig_queue_incremental_flush_buffer(Process* proc,
+                                                         Uint buffer_index,
+                                                         ErtsSignalInQueueBufferArray* buffers) {
+    Uint nr_of_signals_flushed_this_round_from_buff;
+    ErtsSignalInQueueBuffer* buf = &buffers->slots[buffer_index];
+    erts_proc_sig_queue_lock_buffer(buf);
+    nr_of_signals_flushed_this_round_from_buff =
+        buf->queue.len + buf->no_signals_flushed_this_round;
+    //erts_printf("ret %li\n", nr_of_signals_flushed_this_round_from_buff);
+    if (buf->alive && buf->queue.len > 0) {
+        enqueue_signals(proc,
+                        buf->queue.first,
+                        buf->queue.last,
+                        NULL,
+                        buf->queue.len,
+                        erts_atomic32_read_nob(&proc->state),
+                        0);
+        buf->queue.first = NULL;
+        buf->queue.last = &buf->queue.first;
+        buf->queue.len = 0;
+        buf->queue.nmsigs.next = NULL;
+        buf->queue.nmsigs.last = NULL;
+    }
+    buf->no_signals_flushed_this_round = 0;
+    erts_proc_sig_queue_unlock_buffer(buf);
+    return nr_of_signals_flushed_this_round_from_buff;
+}
+
+Sint erts_proc_sig_queue_incremental_flush_buffers(Process* proc) {
+    Uint i;
+    Uint flushed_in_round_from_buff;
+    ErtsSignalInQueueBufferArray* buffers;
+    buffers =
+        (ErtsSignalInQueueBufferArray*)erts_atomic_read_nob(&proc->sig_inq_buffers);
+    if (NULL == buffers) {
+        return -1;
+    }
+    i = buffers->current_slot;
+    while (i < buffers->no_slots &&
+           0 == (flushed_in_round_from_buff = erts_proc_sig_queue_incremental_flush_buffer(proc, i, buffers))) {
+        /* Continue to next buffer */
+        i++;
+    }
+    buffers->no_buffered_signals += flushed_in_round_from_buff;
+    if (i == buffers->no_slots) {
+        Uint ret = buffers->no_buffered_signals;
+        buffers->no_buffered_signals = 0;
+        buffers->current_slot = i;
+        buffers->no_of_rounds += 1;
+        buffers->current_slot = 0;
+        if(buffers->no_of_rounds > 1){
+            return ret;
+        } else {
+            return -1;
+        }
+    } else {
+        buffers->current_slot = i;
+        return -1;
+    }
+}
+
+Sint erts_proc_sig_queue_flush_all_buffers(Process* proc) {
+    Uint i;
+    Uint flushed_in_round_from_buff;
+    ErtsSignalInQueueBufferArray* buffers;
+    buffers =
+        (ErtsSignalInQueueBufferArray*)erts_atomic_read_nob(&proc->sig_inq_buffers);
+    if (NULL == buffers) {
+        return -1;
+    }
+    for(i = 0; i < buffers->no_slots; i++) {
+        flushed_in_round_from_buff =
+            erts_proc_sig_queue_incremental_flush_buffer(proc, i, buffers);
+        buffers->no_buffered_signals += flushed_in_round_from_buff;
+    }
+    buffers->no_of_rounds += 1;
+    if ((buffers->no_of_rounds % ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE) == 0){
+        Uint ret = buffers->no_buffered_signals;
+        buffers->no_buffered_signals = 0;
+        buffers->current_slot = 0;
+        return ret;
+    } else {
+        return -1;
+    }
+}
+
+void erts_proc_sig_queue_enqueuer_help_flush_buffer(Process* proc,
+                                                    Uint buffer_index,
+                                                    ErtsSignalInQueueBufferArray* buffers) {
+    ErtsSignalInQueueBuffer* buf = &buffers->slots[buffer_index];
+    if (EBUSY == erts_proc_trylock(proc, ERTS_PROC_LOCK_MSGQ)) {
+        return;
+    }
+    erts_proc_sig_queue_lock_buffer(buf);
+    if (buf->alive && buf->queue.len > 0) {
+        buf->no_signals_flushed_this_round += buf->queue.len;
+        enqueue_signals(proc,
+                        buf->queue.first,
+                        buf->queue.last,
+                        NULL,
+                        buf->queue.len,
+                        erts_atomic32_read_nob(&proc->state),
+                        0);
+        buf->queue.first = NULL;
+        buf->queue.last = &buf->queue.first;
+        buf->queue.len = 0;
+        buf->queue.nmsigs.next = NULL;
+        buf->queue.nmsigs.last = NULL;
+    }
+    erts_proc_sig_queue_unlock_buffer(buf);
+    erts_proc_unlock(proc, ERTS_PROC_LOCK_MSGQ);
+}
+
+void erts_proc_sig_queue_enqueuer_force_flush_buffer(Process* proc,
+                                                     Uint buffer_index,
+                                                     ErtsSignalInQueueBufferArray* buffers) {
+    ErtsSignalInQueueBuffer* buf = &buffers->slots[buffer_index];
+    erts_proc_sig_queue_lock_buffer(buf);
+    if (buf->alive && buf->queue.len > 0) {
+        buf->no_signals_flushed_this_round += buf->queue.len;
+        enqueue_signals(proc,
+                        buf->queue.first,
+                        buf->queue.last,
+                        NULL,
+                        buf->queue.len,
+                        erts_atomic32_read_nob(&proc->state),
+                        0);
+        buf->queue.first = NULL;
+        buf->queue.last = &buf->queue.first;
+        buf->queue.len = 0;
+        buf->queue.nmsigs.next = NULL;
+        buf->queue.nmsigs.last = NULL;
+    }
+    erts_proc_sig_queue_unlock_buffer(buf);
+}
+
+void erts_proc_sig_queue_flush_buffers(Process* proc) {
     Uint i;
     erts_aint32_t state;
     ErtsSignalInQueueBufferArray* buffers =
-        (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&proc->sig_inq_buffers);
-    Sint nr_of_nonempty_buffers = 0;
-    ERTS_LC_ASSERT(ERTS_PROC_IS_EXITING(proc)
-                   || ((erts_proc_lc_my_proc_locks(proc)
-                        & (ERTS_PROC_LOCK_MAIN
-                           | ERTS_PROC_LOCK_MSGQ))
-                       == (ERTS_PROC_LOCK_MAIN
-                           | ERTS_PROC_LOCK_MSGQ)));
+        (ErtsSignalInQueueBufferArray*)erts_atomic_read_nob(&proc->sig_inq_buffers);
+    ERTS_LC_ASSERT(erts_proc_lc_my_proc_locks(proc) & ERTS_PROC_LOCK_MSGQ);
     if (buffers == NULL) {
-        return -1;
+        return;
     }
-    //erts_printf("FLUSH BUFFERS\n");
     state = erts_atomic32_read_nob(&proc->state);
     for (i = 0; i < buffers->no_slots; i++) {
-        //erts_printf("FLUSH BUFFER %lu\n", i);
-        erts_proc_sig_queue_lock_buffer(&buffers->slots[i]);
-        //erts_printf("GOT LOCK %lu\n", i);
-        if (buffers->slots[i].queue.len > 0 &&
+        ErtsSignalInQueueBuffer* buf = &buffers->slots[i];
+        erts_proc_sig_queue_lock_buffer(buf);
+        if (buf->queue.len > 0) {
             enqueue_signals(proc,
-                            buffers->slots[i].queue.first,
-                            buffers->slots[i].queue.last,
+                            buf->queue.first,
+                            buf->queue.last,
                             NULL,
-                            buffers->slots[i].queue.len,
+                            buf->queue.len,
                             state,
-                            0)) {
-            nr_of_nonempty_buffers++;
+                            0);
+            buf->no_signals_flushed_this_round += buf->queue.len;
         }
-        buffers->slots[i].queue.first = NULL;
-        buffers->slots[i].queue.last = &buffers->slots[i].queue.first;
-        buffers->slots[i].queue.len = 0;
-        buffers->slots[i].queue.nmsigs.next = NULL;
-        buffers->slots[i].queue.nmsigs.last = NULL;
-        erts_proc_sig_queue_unlock_buffer(&buffers->slots[i]);
+        buf->queue.first = NULL;
+        buf->queue.last = &buffers->slots[i].queue.first;
+        buf->queue.len = 0;
+        buf->queue.nmsigs.next = NULL;
+        buf->queue.nmsigs.last = NULL;
+        erts_proc_sig_queue_unlock_buffer(buf);
     }
-    //erts_printf("FLUSH BUFFERS DONE\n");
-    return nr_of_nonempty_buffers;
 }
 
 static void do_free_erts_signal_in_queue_buffer_array(void *vptr)
@@ -6947,17 +7078,31 @@ static void do_free_erts_signal_in_queue_buffer_array(void *vptr)
     erts_free(ERTS_ALC_T_SIGQ_BUFFERS, buffers);
 }
 
-void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc) {
+void erts_proc_sig_queue_maybe_flush_and_deinstall_buffers(Process* proc, Sint flush_number) {
+    ERTS_LC_ASSERT(ERTS_PROC_IS_EXITING(proc) ||
+                   (erts_proc_lc_my_proc_locks(proc) & ERTS_PROC_LOCK_MSGQ));
+    if (flush_number == -1 ||
+        flush_number > ERTS_PROC_SIG_INQ_PARALLEL_DEINSTALL_LIMIT){
+        /* Do not deinstall */
+        if(flush_number != -1) {
+            //erts_printf("flush_number %li\n", flush_number);
+        }
+        return;
+    }
+    if(flush_number != -1) {
+        //erts_printf("deinstall flush_number %li\n", flush_number);
+    }
+    erts_proc_sig_queue_flush_and_deinstall_buffers(proc);
+}
+
+void erts_proc_sig_queue_flush_and_deinstall_buffers(Process* proc) {
     Uint i;
     erts_aint32_t state;
-    ErtsSignalInQueueBufferArray* buffers =
-        (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&proc->sig_inq_buffers);
-    ERTS_LC_ASSERT(ERTS_PROC_IS_EXITING(proc)
-                   || ((erts_proc_lc_my_proc_locks(proc)
-                        & (ERTS_PROC_LOCK_MAIN
-                           | ERTS_PROC_LOCK_MSGQ))
-                       == (ERTS_PROC_LOCK_MAIN
-                           | ERTS_PROC_LOCK_MSGQ)));
+    ErtsSignalInQueueBufferArray* buffers;
+    ERTS_LC_ASSERT(ERTS_PROC_IS_EXITING(proc) ||
+                   (erts_proc_lc_my_proc_locks(proc) & ERTS_PROC_LOCK_MSGQ));
+    buffers =
+        (ErtsSignalInQueueBufferArray*)erts_atomic_read_nob(&proc->sig_inq_buffers);
     if (buffers == NULL) {
         return;
     }
@@ -6992,14 +7137,24 @@ void erts_proc_sig_queue_deinstall_buffers_and_flush(Process* proc) {
                                             sizeof(ErtsSignalInQueueBufferArray));
 }
 
-void erts_proc_sig_queue_install_buffers(Process* p) {
+void erts_proc_sig_queue_maybe_install_buffers(Process* p, erts_aint32_t state) {
     int i;
     ErtsSignalInQueueBufferArray* buffers;
-    //TODO change alloc type
+    if (!(state & ERTS_PSFLG_OFF_HEAP_MSGQ) ||
+        (((ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&p->sig_inq_buffers)) != NULL) ||
+        (!ERTS_PROC_SIG_INQ_PARALLEL_ALWAYS_TURN_ON &&
+         p->sig_inq_contention_counter <= ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_INSTALL_LIMIT)) {
+        return;
+    }
+    //erts_printf("INSTALL BUFFERS FOR PROCESS %p\n", p);
     buffers = erts_alloc(ERTS_ALC_T_SIGQ_BUFFERS,
-                         sizeof(ErtsSignalInQueueBufferArray));
-    //TODO use configurable variable
+                         sizeof(ErtsSignalInQueueBufferArray) +
+                         erts_no_schedulers * sizeof(ErtsSignalInQueueBuffer));
     buffers->no_slots = erts_no_schedulers;
+    buffers->current_slot = 0;
+    buffers->no_buffered_signals = 0;
+    buffers->no_of_rounds = 0;
+    //TODO use configurable variable
     //erts_printf("no slots: %lu", buffers->no_slots);
     /* Initiallize  slots */
     for(i = 0; i < buffers->no_slots; i++) {
@@ -7011,6 +7166,7 @@ void erts_proc_sig_queue_install_buffers(Process* p) {
         buffers->slots[i].queue.len = 0;
         buffers->slots[i].queue.nmsigs.next = NULL;
         buffers->slots[i].queue.nmsigs.last = NULL;
+        buffers->slots[i].no_signals_flushed_this_round = 0;
     }
     erts_atomic_set_mb(&p->sig_inq_buffers, (Uint)buffers);
 }
