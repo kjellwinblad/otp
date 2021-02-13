@@ -1056,7 +1056,9 @@ int erts_proc_sig_queue_try_enqueue_to_buffer(Process* sender, /* is NULL if the
                                               ErtsProcLocks receiver_locks,
                                               ErtsMessage* first,
                                               ErtsMessage** last,
-                                              Uint len);
+                                              ErtsMessage** last_next,
+                                              Uint len,
+                                              int is_signal);
 /**
  *
  * @brief Flush pending signal.

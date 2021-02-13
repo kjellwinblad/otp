@@ -367,7 +367,7 @@ queue_messages(Process* sender, /* is NULL if the sender is not a local process 
     ERTS_LC_ASSERT((erts_proc_lc_my_proc_locks(receiver) & ERTS_PROC_LOCK_MSGQ)
                    == (receiver_locks & ERTS_PROC_LOCK_MSGQ));
 
-    if (erts_proc_sig_queue_try_enqueue_to_buffer(sender, receiver, receiver_locks, first, last, len)) {
+    if (erts_proc_sig_queue_try_enqueue_to_buffer(sender, receiver, receiver_locks, first, last, NULL, len, 0)) {
         return;
     }
 

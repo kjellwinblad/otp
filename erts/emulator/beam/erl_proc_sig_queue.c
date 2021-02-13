@@ -702,6 +702,11 @@ first_last_done:
 
     last->next = NULL;
 
+    if (op != ERTS_SIG_Q_OP_PROCESS_INFO &&
+        erts_proc_sig_queue_try_enqueue_to_buffer(c_p, rp, 0, first, &last->next, last_next, 0, 1)) {
+        return 1;
+    }
+
     erts_proc_lock(rp, ERTS_PROC_LOCK_MSGQ);
 
     state = erts_atomic32_read_nob(&rp->state);
@@ -6916,7 +6921,9 @@ erts_proc_sig_queue_try_enqueue_to_buffer(Process* sender, /* is NULL if the sen
                                           ErtsProcLocks receiver_locks,
                                           ErtsMessage* first,
                                           ErtsMessage** last,
-                                          Uint len)
+                                          ErtsMessage** last_next,
+                                          Uint len,
+                                          int is_signal)
 {
     ErtsSignalInQueueBufferArray* buffers;
     if ((receiver_locks & ERTS_PROC_LOCK_MSGQ) ||
@@ -6931,7 +6938,7 @@ erts_proc_sig_queue_try_enqueue_to_buffer(Process* sender, /* is NULL if the sen
         erts_proc_sig_queue_lock_buffer(buffer);
         if (buffer->alive) {
             /* Insert into buffer */
-            if (last == &first->next) {
+            if (last == &first->next && !is_signal) {
                 ASSERT(len == 1);
                 ASSERT(ERTS_SIG_IS_MSG(first));
                 *buffer->queue.last = first;
@@ -6941,7 +6948,7 @@ erts_proc_sig_queue_try_enqueue_to_buffer(Process* sender, /* is NULL if the sen
                 enqueue_signals(receiver,
                                 first,
                                 last,
-                                NULL,
+                                last_next,
                                 len,
                                 erts_atomic32_read_acqb(&receiver->state),
                                 0,
@@ -6949,7 +6956,11 @@ erts_proc_sig_queue_try_enqueue_to_buffer(Process* sender, /* is NULL if the sen
             }
             /* We are done */
             erts_proc_sig_queue_unlock_buffer(buffer);
-            erts_proc_notify_new_message(receiver, receiver_locks);
+            if (last == &first->next && !is_signal) {
+                erts_proc_notify_new_message(receiver, receiver_locks);
+            } else {
+                erts_proc_notify_new_sig(receiver, erts_atomic32_read_acqb(&receiver->state), !is_signal ? ERTS_PSFLG_ACTIVE : 0);
+            }
             return 1;
         }
         /* Continue as normal if buffer is dead */
