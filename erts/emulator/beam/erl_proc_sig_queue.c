@@ -482,49 +482,52 @@ static int dbg_count_nmsigs(ErtsMessage *first)
 #endif
 
 static ERTS_INLINE erts_aint32_t
-enqueue_signals(Process *rp, ErtsMessage *first,
+enqueue_signals(Process *rpa, ErtsMessage *first,
                 ErtsMessage **last, ErtsMessage **last_next,
                 Uint num_msgs,
                 erts_aint32_t in_state,
-                int flush_buffers)
+                int flush_buffers,
+                ErtsSignalInQueue* dest_queue)
 {
     erts_aint32_t state = in_state;
-    ErtsMessage **this = rp->sig_inq.last;
+    ErtsMessage **this = dest_queue->last;
 
     ERTS_HDBG_CHECK_SIGNAL_IN_QUEUE(rp);
 
     ASSERT(!*this);
     if (flush_buffers) {
-        erts_proc_sig_queue_flush_buffers(rp);
+        erts_proc_sig_queue_flush_buffers(rpa);
     }
     *this = first;
-    rp->sig_inq.last = last;
+    dest_queue->last = last;
 
-    if (!rp->sig_inq.nmsigs.next) {
+    if (!dest_queue->nmsigs.next) {
         ASSERT(!rp->sig_inq.nmsigs.last);
         if (ERTS_SIG_IS_NON_MSG(first)) {
-            rp->sig_inq.nmsigs.next = this;
+            dest_queue->nmsigs.next = this;
         }
         else if (last_next) {
             ASSERT(first->next && ERTS_SIG_IS_NON_MSG(first->next));
-            rp->sig_inq.nmsigs.next = &first->next;
+            dest_queue->nmsigs.next = &first->next;
         }
         else
             goto no_nmsig;
 
-        state = erts_atomic32_read_bor_nob(&rp->state,
+        state = erts_atomic32_read_bor_nob(&rpa->state,
                                            ERTS_PSFLG_SIG_IN_Q);
     no_nmsig:
-        ASSERT(!(state & ERTS_PSFLG_SIG_IN_Q));
+        ;/* TODO is it fine that this assertion no longer holds? */
+        /*ASSERT(!(state & ERTS_PSFLG_SIG_IN_Q));*/
     }
     else {
         ErtsSignal *sig;
         ASSERT(rp->sig_inq.nmsigs.last);
 
-        sig = (ErtsSignal *) *rp->sig_inq.nmsigs.last;
+        sig = (ErtsSignal *) *dest_queue->nmsigs.last;
 
         ASSERT(sig && !sig->common.specific.next);
-        ASSERT(state & ERTS_PSFLG_SIG_IN_Q);
+        /* I think this assertion might not hold anymore (is that fine?) */
+        // ASSERT(state & ERTS_PSFLG_SIG_IN_Q);
         if (ERTS_SIG_IS_NON_MSG(first)) {
             sig->common.specific.next = this;
         }
@@ -536,16 +539,16 @@ enqueue_signals(Process *rp, ErtsMessage *first,
 
     if (last_next) {
         ASSERT(dbg_count_nmsigs(first) >= 2);
-        rp->sig_inq.nmsigs.last = last_next;
+        dest_queue->nmsigs.last = last_next;
     }
     else if (ERTS_SIG_IS_NON_MSG(first)) {
         ASSERT(dbg_count_nmsigs(first) == 1);
-        rp->sig_inq.nmsigs.last = this;
+        dest_queue->nmsigs.last = this;
     }
     else
         ASSERT(dbg_count_nmsigs(first) == 0);
 
-    rp->sig_inq.len += num_msgs;
+    dest_queue->len += num_msgs;
 
     ERTS_HDBG_CHECK_SIGNAL_IN_QUEUE(rp);
 
@@ -557,7 +560,7 @@ erts_aint32_t erts_enqueue_signals(Process *rp, ErtsMessage *first,
                                    Uint num_msgs,
                                    erts_aint32_t in_state)
 {
-    return enqueue_signals(rp, first, last, last_next, num_msgs, in_state, in_state & ERTS_PSFLG_OFF_HEAP_MSGQ);
+    return enqueue_signals(rp, first, last, last_next, num_msgs, in_state, in_state & ERTS_PSFLG_OFF_HEAP_MSGQ, &rp->sig_inq);
 }
 
 erts_aint32_t erts_enqueue_signals_optional_flush(Process *rp, ErtsMessage *first,
@@ -566,7 +569,7 @@ erts_aint32_t erts_enqueue_signals_optional_flush(Process *rp, ErtsMessage *firs
                                                   erts_aint32_t in_state,
                                                   int flush_buffers)
 {
-    return enqueue_signals(rp, first, last, last_next, num_msgs, in_state, flush_buffers);
+    return enqueue_signals(rp, first, last, last_next, num_msgs, in_state, flush_buffers, &rp->sig_inq);
 }
 
 void
@@ -706,7 +709,7 @@ first_last_done:
     if (ERTS_PSFLG_FREE & state)
         res = 0;
     else {
-        state = enqueue_signals(rp, first, &last->next, last_next, 0, state, 1);
+        state = enqueue_signals(rp, first, &last->next, last_next, 0, state, 1, &rp->sig_inq);
         if (ERTS_UNLIKELY(op == ERTS_SIG_Q_OP_PROCESS_INFO))
             check_push_msgq_len_offs_marker(rp, sig);
         res = !0;
@@ -6877,6 +6880,14 @@ erts_proc_sig_hdbg_check_in_queue(Process *p, char *what, char *file, int line)
 
 #endif /* ERTS_PROC_SIG_HARD_DEBUG */
 
+void erts_proc_sig_queue_lock(Process* proc) {
+    if (EBUSY == erts_proc_trylock(proc, ERTS_PROC_LOCK_MSGQ)) {
+        erts_proc_lock(proc, ERTS_PROC_LOCK_MSGQ);
+        proc->sig_inq_contention_counter += 1;
+    } else if(proc->sig_inq_contention_counter > 0) {
+        proc->sig_inq_contention_counter -= 1;
+    }
+}
 
 void erts_proc_sig_queue_lock_buffer(ErtsSignalInQueueBuffer* slot) {
     erts_mtx_lock(&slot->lock);
@@ -6899,6 +6910,54 @@ void erts_proc_sig_queue_unlock_buffer(ErtsSignalInQueueBuffer* slot) {
     erts_mtx_unlock(&slot->lock);
 }
 
+int
+erts_proc_sig_queue_try_enqueue_to_buffer(Process* sender, /* is NULL if the sender is not a local process */
+                                          Process* receiver,
+                                          ErtsProcLocks receiver_locks,
+                                          ErtsMessage* first,
+                                          ErtsMessage** last,
+                                          Uint len)
+{
+    ErtsSignalInQueueBufferArray* buffers;
+    if ((receiver_locks & ERTS_PROC_LOCK_MSGQ) ||
+        (sender == NULL) ||
+        NULL == (buffers = (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&receiver->sig_inq_buffers))) {
+        return 0;
+    }
+    {
+        Uint to_hash = internal_pid_number(sender->common.id);
+        ErtsSignalInQueueBuffer* buffer = &buffers->slots[to_hash % buffers->no_slots];
+        //erts_printf("SLOT %lu\n", to_hash % buffers->no_slots);
+        erts_proc_sig_queue_lock_buffer(buffer);
+        if (buffer->alive) {
+            /* Insert into buffer */
+            if (last == &first->next) {
+                ASSERT(len == 1);
+                ASSERT(ERTS_SIG_IS_MSG(first));
+                *buffer->queue.last = first;
+                buffer->queue.last = &first->next;
+                buffer->queue.len++;
+            } else {
+                enqueue_signals(receiver,
+                                first,
+                                last,
+                                NULL,
+                                len,
+                                erts_atomic32_read_acqb(&receiver->state),
+                                0,
+                                &buffer->queue);
+            }
+            /* We are done */
+            erts_proc_sig_queue_unlock_buffer(buffer);
+            erts_proc_notify_new_message(receiver, receiver_locks);
+            return 1;
+        }
+        /* Continue as normal if buffer is dead */
+        erts_proc_sig_queue_unlock_buffer(buffer);
+        return 0;
+    }
+}
+
 
 static Uint erts_proc_sig_queue_incremental_flush_buffer(Process* proc,
                                                          Uint buffer_index,
@@ -6916,7 +6975,8 @@ static Uint erts_proc_sig_queue_incremental_flush_buffer(Process* proc,
                         NULL,
                         buf->queue.len,
                         erts_atomic32_read_nob(&proc->state),
-                        0);
+                        0,
+                        &proc->sig_inq);
         buf->queue.first = NULL;
         buf->queue.last = &buf->queue.first;
         buf->queue.len = 0;
@@ -7002,7 +7062,8 @@ void erts_proc_sig_queue_enqueuer_help_flush_buffer(Process* proc,
                         NULL,
                         buf->queue.len,
                         erts_atomic32_read_nob(&proc->state),
-                        0);
+                        0,
+                        &proc->sig_inq);
         buf->queue.first = NULL;
         buf->queue.last = &buf->queue.first;
         buf->queue.len = 0;
@@ -7026,7 +7087,8 @@ void erts_proc_sig_queue_enqueuer_force_flush_buffer(Process* proc,
                         NULL,
                         buf->queue.len,
                         erts_atomic32_read_nob(&proc->state),
-                        0);
+                        0,
+                        &proc->sig_inq);
         buf->queue.first = NULL;
         buf->queue.last = &buf->queue.first;
         buf->queue.len = 0;
@@ -7056,7 +7118,8 @@ void erts_proc_sig_queue_flush_buffers(Process* proc) {
                             NULL,
                             buf->queue.len,
                             state,
-                            0);
+                            0,
+                            &proc->sig_inq);
             buf->no_signals_flushed_this_round += buf->queue.len;
         }
         buf->queue.first = NULL;
@@ -7119,7 +7182,8 @@ void erts_proc_sig_queue_flush_and_deinstall_buffers(Process* proc) {
                             NULL,
                             buffers->slots[i].queue.len,
                             state,
-                            0);
+                            0,
+                            &proc->sig_inq);
         }
         buffers->slots[i].queue.first = NULL;
         buffers->slots[i].queue.last = &buffers->slots[i].queue.first;

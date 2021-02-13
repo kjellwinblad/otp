@@ -1050,6 +1050,13 @@ erts_enqueue_signals_optional_flush(Process *rp, ErtsMessage *first,
 
 void erts_proc_sig_queue_lock_buffer(ErtsSignalInQueueBuffer* slot);
 void erts_proc_sig_queue_unlock_buffer(ErtsSignalInQueueBuffer* slot);
+void erts_proc_sig_queue_lock(Process* proc);
+int erts_proc_sig_queue_try_enqueue_to_buffer(Process* sender, /* is NULL if the sender is not a local process */
+                                              Process* receiver,
+                                              ErtsProcLocks receiver_locks,
+                                              ErtsMessage* first,
+                                              ErtsMessage** last,
+                                              Uint len);
 /**
  *
  * @brief Flush pending signal.

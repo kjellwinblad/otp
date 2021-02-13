@@ -352,7 +352,6 @@ queue_messages(Process* sender, /* is NULL if the sender is not a local process 
 {
     int locked_msgq = 0;
     erts_aint32_t state;
-    ErtsSignalInQueueBufferArray* buffers;
 #ifdef DEBUG
     {
         ErtsMessage* fmsg = ERTS_SIG_IS_MSG(first) ? first : first->next;
@@ -368,46 +367,12 @@ queue_messages(Process* sender, /* is NULL if the sender is not a local process 
     ERTS_LC_ASSERT((erts_proc_lc_my_proc_locks(receiver) & ERTS_PROC_LOCK_MSGQ)
                    == (receiver_locks & ERTS_PROC_LOCK_MSGQ));
 
-    /*erts_printf("queue_messages %p START %d %d %d\n",
-      receiver,
-      sender != NULL,
-      last == &first->next,
-      NULL != (buffers = (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&receiver->sig_inq_buffers)));*/
-    if (sender != NULL &&
-        last == &first->next &&
-        NULL != (buffers = (ErtsSignalInQueueBufferArray*)erts_atomic_read_acqb(&receiver->sig_inq_buffers))) {
-        Uint to_hash = internal_pid_number(sender->common.id);
-        ErtsSignalInQueueBuffer* buffer = &buffers->slots[to_hash % buffers->no_slots];
-        //erts_printf("SLOT %lu\n", to_hash % buffers->no_slots);
-        erts_proc_sig_queue_lock_buffer(buffer);
-        if (buffer->alive) {
-            /* Insert into buffer */
-            ASSERT(ERTS_SIG_IS_MSG(first));
-            *buffer->queue.last = first;
-            buffer->queue.last = &first->next;
-            buffer->queue.len++;
-            erts_proc_sig_queue_unlock_buffer(buffer);
-            //erts_printf("queue_message in buffer (NOTIFY RECEIVER)!!\n");
-            erts_proc_notify_new_message(receiver, receiver_locks);
-            /* We are done */
-            return;
-        }
-        /* Continue as normal if buffer is dead */
-        erts_proc_sig_queue_unlock_buffer(buffer);
+    if (erts_proc_sig_queue_try_enqueue_to_buffer(sender, receiver, receiver_locks, first, last, len)) {
+        return;
     }
 
-
-    /*if (!(receiver_locks & ERTS_PROC_LOCK_MSGQ)) {
-        erts_proc_lock(receiver, ERTS_PROC_LOCK_MSGQ);
-	locked_msgq = 1;
-    }*/
     if (!(receiver_locks & ERTS_PROC_LOCK_MSGQ)) {
-        if(erts_proc_trylock(receiver, ERTS_PROC_LOCK_MSGQ)){
-            erts_proc_lock(receiver, ERTS_PROC_LOCK_MSGQ);
-            receiver->sig_inq_contention_counter += 1;
-        } else if(receiver->sig_inq_contention_counter > 0) {
-            receiver->sig_inq_contention_counter -= 1;
-        }
+        erts_proc_sig_queue_lock(receiver);
 	locked_msgq = 1;
     }
 
