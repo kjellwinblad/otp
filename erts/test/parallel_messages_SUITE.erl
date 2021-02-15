@@ -166,7 +166,7 @@ throughput_benchmark(
                             receive start -> ok end,
                             WorksDone =
                                 do_work(0, ProbHelpTab, Operations, Receiver),
-                            ParentPid ! WorksDone,
+                            ParentPid ! {works_done, WorksDone},
                             Receiver ! stop
                     end,
                 ChildPids =
@@ -179,7 +179,7 @@ throughput_benchmark(
                 TotalWorksDone = lists:foldl(
                                    fun(_, Sum) ->
                                            receive
-                                               Count -> Sum + Count
+                                               {works_done, Count} -> Sum + Count
                                            end
                                    end, 0, ChildPids),
                 {TimeAfterSends, ok} =
@@ -281,6 +281,7 @@ throughput_benchmark(
                                   PrintData(Version,[]),
                                   lists:foreach(
                                     fun(ThreadCount) ->
+                                            %erlang:display({thread_count, ThreadCount}),
                                             RunBenchmarkAndReport(ThreadCount,
                                                                   Scenario,
                                                                   BenchmarkDurationMs,

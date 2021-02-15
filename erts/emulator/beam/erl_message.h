@@ -42,7 +42,7 @@
 #define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_INSTALL_LIMIT 1000
 #define ERTS_PROC_SIG_INQ_PARALLEL_ALWAYS_TURN_ON 0
 #define ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE 128
-#define ERTS_PROC_SIG_INQ_PARALLEL_DEINSTALL_LIMIT (ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE * 8)
+#define ERTS_PROC_SIG_INQ_PARALLEL_DEINSTALL_LIMIT (ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE * 4)
 #endif
 
 struct proc_bin;
@@ -354,7 +354,6 @@ typedef struct {
 } ErtsSignalInQueue;
 
 typedef struct {
-    /*erts_atomic_t lock;*/
     erts_mtx_t lock;
     int alive;
     Uint no_signals_flushed_this_round;
@@ -364,6 +363,7 @@ typedef struct {
 } ErtsSignalInQueueBuffer;
 
 typedef struct {
+    erts_atomic64_t free_slots;
     ErtsThrPrgrLaterOp free_item;
     Uint no_slots;
     Uint current_slot;

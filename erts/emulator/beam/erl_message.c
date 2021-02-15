@@ -399,7 +399,7 @@ queue_messages(Process* sender, /* is NULL if the sender is not a local process 
 
     if (last == &first->next) {
         ASSERT(len == 1);
-        erts_proc_sig_queue_flush_buffers(receiver);
+        erts_proc_sig_queue_flush_all_buffers(receiver);
         LINK_MESSAGE(receiver, first);
     }
     else {
