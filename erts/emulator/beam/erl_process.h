@@ -89,6 +89,12 @@ typedef struct process Process;
 #define ERTS_HEAP_FREE(Type, Ptr, Size)					\
      erts_free((Type), (Ptr))
 
+#ifdef DEBUG
+#define ERTS_PROC_GET_STATE_IF_DEBUG(proc) erts_atomic32_read_mb(&(proc)->state)
+#else
+#define ERTS_PROC_GET_STATE_IF_DEBUG(proc) 0
+#endif
+
 #include "export.h"
 
 struct saved_calls {

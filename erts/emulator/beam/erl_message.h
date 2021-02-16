@@ -34,15 +34,25 @@
 #endif
 
 #ifdef DEBUG
-#define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_INSTALL_LIMIT 1000
+/* The number of buffers have to be 64 or less because we use a single
+   word to implement a bitset with information about non-empty
+   buffers */
+#define ERTS_PROC_SIG_INQ_PARALLEL_NR_OF_BUFFERS 64
+#define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_INSTALL_LIMIT 250
 #define ERTS_PROC_SIG_INQ_PARALLEL_ALWAYS_TURN_ON 1
 #define ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE 1
 #define ERTS_PROC_SIG_INQ_PARALLEL_DEINSTALL_LIMIT 0
 #else
-#define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_INSTALL_LIMIT 1000
+/* The number of buffers have to be 64 or less because we use a single
+   word to implement a bitset with information about non-empty
+   buffers */
+#define ERTS_PROC_SIG_INQ_PARALLEL_NR_OF_BUFFERS 64
+#define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_INSTALL_LIMIT 250
 #define ERTS_PROC_SIG_INQ_PARALLEL_ALWAYS_TURN_ON 0
-#define ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE 128
-#define ERTS_PROC_SIG_INQ_PARALLEL_DEINSTALL_LIMIT (ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE * 4)
+#define ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE 512
+#define ERTS_PROC_SIG_INQ_PARALLEL_MIN_NUMBER_OF_SIGNALS_PER_ROUND 2
+#define ERTS_PROC_SIG_INQ_PARALLEL_DEINSTALL_LIMIT (ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE * \
+                                                    ERTS_PROC_SIG_INQ_PARALLEL_MIN_NUMBER_OF_SIGNALS_PER_ROUND)
 #endif
 
 struct proc_bin;
@@ -363,14 +373,11 @@ typedef struct {
 } ErtsSignalInQueueBuffer;
 
 typedef struct {
-    erts_atomic64_t free_slots;
+    erts_atomic64_t nonempty_slots;
     ErtsThrPrgrLaterOp free_item;
-    Uint no_slots;
-    Uint current_slot;
     Uint no_buffered_signals;
     Uint no_of_rounds;
-    /* Dynamic array size */
-    ErtsSignalInQueueBuffer slots[];
+    ErtsSignalInQueueBuffer slots[ERTS_PROC_SIG_INQ_PARALLEL_NR_OF_BUFFERS];
 } ErtsSignalInQueueBufferArray;
 
 typedef struct erl_trace_message_queue__ {
