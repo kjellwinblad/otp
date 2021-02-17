@@ -1616,7 +1616,7 @@ erts_msgq_recv_marker_clear(Process *c_p, Eterm id)
 ERTS_GLB_INLINE Eterm
 erts_msgq_recv_marker_insert(Process *c_p)
 {
-    erts_proc_lock(c_p, ERTS_PROC_LOCK_MSGQ);
+    erts_proc_sig_queue_lock(c_p);
     erts_proc_sig_fetch(c_p);
     erts_proc_unlock(c_p, ERTS_PROC_LOCK_MSGQ);
 
@@ -1665,7 +1665,7 @@ erts_msgq_recv_marker_insert_bind(Process *c_p, Eterm id)
 	    ERTS_PROC_SIG_RECV_MARK_CLEAR_OLD_MARK__(blkp);
 #endif
 
-	erts_proc_lock(c_p, ERTS_PROC_LOCK_MSGQ);
+        erts_proc_sig_queue_lock(c_p);
 	erts_proc_sig_fetch(c_p);
 	erts_proc_unlock(c_p, ERTS_PROC_LOCK_MSGQ);
 
@@ -1757,7 +1757,7 @@ erts_msgq_set_save_end(Process *c_p)
 {
     /* Set save pointer to end of message queue... */
 
-    erts_proc_lock(c_p, ERTS_PROC_LOCK_MSGQ);
+    erts_proc_sig_queue_lock(c_p);
     erts_proc_sig_fetch(c_p);
     erts_proc_unlock(c_p, ERTS_PROC_LOCK_MSGQ);
 

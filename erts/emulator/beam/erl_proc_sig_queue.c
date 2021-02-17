@@ -4736,7 +4736,7 @@ erts_proc_sig_handle_incoming(Process *c_p, erts_aint32_t *statep,
     state = erts_atomic32_read_nob(&c_p->state);
     if (!local_only) {
         if (ERTS_PSFLG_SIG_IN_Q & state) {
-            erts_proc_lock(c_p, ERTS_PROC_LOCK_MSGQ);
+            erts_proc_sig_queue_lock(c_p);
             erts_proc_sig_fetch(c_p);
             erts_proc_unlock(c_p, ERTS_PROC_LOCK_MSGQ);
         }
@@ -5916,7 +5916,7 @@ erts_proc_sig_receive_helper(Process *c_p,
 
             consumed_reds += 4;
             left_reds -= 4;
-            erts_proc_lock(c_p, ERTS_PROC_LOCK_MSGQ);
+            erts_proc_sig_queue_lock(c_p);
             erts_proc_sig_fetch(c_p);
             /*
              * Messages may have been moved directly to
