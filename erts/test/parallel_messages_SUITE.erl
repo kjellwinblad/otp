@@ -29,26 +29,14 @@ do_work(WorksDoneSoFar, ProbHelpTab, Operations, Receiver) ->
 -record(parallel_messages_bench_config,
         {benchmark_duration_ms = 500,
          recover_time_ms = 1000,
-         thread_counts = not_set,
-         nr_of_repeats = 3,
-         report_receive_throughput = [false, true],
+         thread_counts = [4],
+         nr_of_repeats = 1,
+         report_receive_throughput = [false],
          spawn_opts = [[{message_queue_data, off_heap}]],
          scenarios =
              [
               [
-               {1.0, {message_size, 1}}
-              ],
-              [
-               {1.0, {message_size, 10}}
-              ],
-              [
-               {1.0, {message_size, 100}}
-              ],
-              [
-               {1.0, {message_size, 1000}}
-              ],
-              [
-               {1.0, {message_size, 10000}}
+               {1.0, {exit_signal_size, 3}}
               ]
              ],
          notify_res_fun = fun(_Name, _Throughput) -> ok end,
@@ -92,6 +80,19 @@ throughput_benchmark(
                                     Receiver ! Msg
                             end,
                         put(Size, NewSendFun),
+                        NewSendFun;
+                    SendFun ->
+                        SendFun
+                end;
+           ({exit_signal_size, Size} = SigType) ->
+                case get(SigType) of
+                    undefined ->
+                        Msg = lists:seq(1, Size),
+                        NewSendFun =
+                            fun(Receiver) ->
+                                    erlang:exit(Receiver, Msg)
+                            end,
+                        put(SigType, NewSendFun),
                         NewSendFun;
                     SendFun ->
                         SendFun
@@ -140,7 +141,8 @@ throughput_benchmark(
                 receive {ets_bench_data, Data} -> Data end
         end,
     %% Function that runs a benchmark instance and returns the number
-    %% of operations that were performed
+    %% of operations that were performed and how long time they took
+    %% to perform
     RunBenchmark =
         fun({NrOfProcs, Scenario, Duration, SpawnOpts}) ->
                 ProbHelpTab = CalculateOpsProbHelpTab(Scenario, 0),
@@ -154,13 +156,19 @@ throughput_benchmark(
                                     case Msg of
                                         stop ->
                                             ReceiveFun(NrOfStops + 1, ReceiveCount);
-                                        _ ->
+                                        _X ->
+                                            %%erlang:display(X),
                                             ReceiveFun(NrOfStops, ReceiveCount + 1)
                                     end
                             end
                     end,
-                Receiver = spawn_opt(fun() -> ReceiveFun(0, 0) end,
-                                     SpawnOpts),
+                Receiver =
+                    spawn_opt(
+                      fun() ->
+                              process_flag(trap_exit, true),
+                              ReceiveFun(0, 0)
+                      end,
+                      SpawnOpts),
                 Worker =
                     fun() ->
                             receive start -> ok end,
@@ -188,6 +196,7 @@ throughput_benchmark(
                               receive
                                   {done_nothing_more_to_receive, ReceiveCount} ->
                                       %% Sanity check
+                                      erlang:display({TotalWorksDone - ReceiveCount, receiveCount, ReceiveCount, send_count, TotalWorksDone}),
                                       ReceiveCount = TotalWorksDone,
                                       ok
                               end
