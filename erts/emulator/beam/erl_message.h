@@ -33,26 +33,21 @@
 #define ERTS_MSG_COPY_WORDS_PER_REDUCTION 64
 #endif
 
+/* The number of buffers have to be 64 or less because we currenlty
+   use a single word to implement a bitset with information about
+   non-empty buffers */
 #ifdef DEBUG
-/* The number of buffers have to be 64 or less because we use a single
-   word to implement a bitset with information about non-empty
-   buffers */
-#define ERTS_PROC_SIG_INQ_PARALLEL_NR_OF_BUFFERS 64
-#define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_INSTALL_LIMIT 250
-#define ERTS_PROC_SIG_INQ_PARALLEL_ALWAYS_TURN_ON 1
-#define ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE 1
-#define ERTS_PROC_SIG_INQ_PARALLEL_DEINSTALL_LIMIT 0
+#define ERTS_PROC_SIG_INQ_BUFFERED_NR_OF_BUFFERS 64
+#define ERTS_PROC_SIG_INQ_BUFFERED_CONTENTION_INSTALL_LIMIT 250
+#define ERTS_PROC_SIG_INQ_BUFFERED_ALWAYS_TURN_ON 1
+#define ERTS_PROC_SIG_INQ_BUFFERED_MIN_FLUSH_ALL_OPS_TO_AVERAGE 1
+#define ERTS_PROC_SIG_INQ_BUFFERED_MIN_NO_OF_ENQUEUES_PER_FLUSH_ALL_OP 0
 #else
-/* The number of buffers have to be 64 or less because we use a single
-   word to implement a bitset with information about non-empty
-   buffers */
-#define ERTS_PROC_SIG_INQ_PARALLEL_NR_OF_BUFFERS 64
-#define ERTS_PROC_SIG_INQ_PARALLEL_CONTENTION_INSTALL_LIMIT 250
-#define ERTS_PROC_SIG_INQ_PARALLEL_ALWAYS_TURN_ON 1
-#define ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE 512
-#define ERTS_PROC_SIG_INQ_PARALLEL_MIN_NUMBER_OF_SIGNALS_PER_ROUND 2
-#define ERTS_PROC_SIG_INQ_PARALLEL_DEINSTALL_LIMIT (ERTS_PROC_SIG_INQ_PARALLEL_ROUNDS_TO_AVERAGE * \
-                                                    ERTS_PROC_SIG_INQ_PARALLEL_MIN_NUMBER_OF_SIGNALS_PER_ROUND)
+#define ERTS_PROC_SIG_INQ_BUFFERED_NR_OF_BUFFERS 64
+#define ERTS_PROC_SIG_INQ_BUFFERED_CONTENTION_INSTALL_LIMIT 250
+#define ERTS_PROC_SIG_INQ_BUFFERED_ALWAYS_TURN_ON 0
+#define ERTS_PROC_SIG_INQ_BUFFERED_MIN_FLUSH_ALL_OPS_TO_AVERAGE 1024
+#define ERTS_PROC_SIG_INQ_BUFFERED_MIN_NO_OF_ENQUEUES_PER_FLUSH_ALL_OP 2
 #endif
 
 struct proc_bin;
@@ -365,8 +360,13 @@ typedef struct {
 
 typedef struct {
     erts_mtx_t lock;
+    /* Boolean value indicateing if the buffer is alive. An enqueue
+       attempt to a dead buffer has to be canceled */
     int alive;
-    Uint no_signals_flushed_this_round;
+    /* The number of enqueues that has been performed to this
+       buffer. This value is used to decide if we should adapt back to
+       an unbuffered state */
+    Uint no_of_enqueues;
     ErtsSignalInQueue queue;
     byte pad[ERTS_CACHE_LINE_SIZE -
              (sizeof(erts_mtx_t) - sizeof(int) - sizeof(ErtsSignalInQueue)) % ERTS_CACHE_LINE_SIZE];
@@ -375,9 +375,9 @@ typedef struct {
 typedef struct {
     erts_atomic64_t nonempty_slots;
     ErtsThrPrgrLaterOp free_item;
-    Uint no_buffered_signals;
     Uint no_of_rounds;
-    ErtsSignalInQueueBuffer slots[ERTS_PROC_SIG_INQ_PARALLEL_NR_OF_BUFFERS];
+    Uint no_of_enqueues;
+    ErtsSignalInQueueBuffer slots[ERTS_PROC_SIG_INQ_BUFFERED_NR_OF_BUFFERS];
 } ErtsSignalInQueueBufferArray;
 
 typedef struct erl_trace_message_queue__ {

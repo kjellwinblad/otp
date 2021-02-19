@@ -29,14 +29,21 @@ do_work(WorksDoneSoFar, ProbHelpTab, Operations, Receiver) ->
 -record(parallel_messages_bench_config,
         {benchmark_duration_ms = 500,
          recover_time_ms = 1000,
-         thread_counts = [4],
+         thread_counts = not_set,
          nr_of_repeats = 1,
          report_receive_throughput = [false],
          spawn_opts = [[{message_queue_data, off_heap}]],
          scenarios =
              [
               [
+               {1.0, {message_size, 1}}
+              ],
+              [
                {1.0, {exit_signal_size, 3}}
+              ],
+              [
+               {0.5, {exit_signal_size, 1}},
+               {0.5, {message_size, 1}}
               ]
              ],
          notify_res_fun = fun(_Name, _Throughput) -> ok end,

@@ -90,6 +90,9 @@
 #if 0
 #  define ERTS_PROC_SIG_HARD_DEBUG_RECV_MARKER
 #endif
+#if 0
+#  define ERTS_PROC_SIG_HARD_DEBUG_SIGQ_BUFFERS
+#endif
 
 struct erl_mesg;
 struct erl_dist_external;
@@ -234,7 +237,7 @@ void erts_proc_sig_queue_maybe_install_buffers(Process* p, erts_aint32_t state);
 void erts_proc_sig_queue_maybe_flush_and_deinstall_buffers(Process* proc, Sint flush_number);
 void erts_proc_sig_queue_flush_and_deinstall_buffers(Process* proc);
 Sint erts_proc_sig_queue_incremental_flush_buffers(Process* proc);
-Sint erts_proc_sig_queue_flush_all_buffers(Process* proc);
+void erts_proc_sig_queue_flush_all_buffers(Process* proc);
 void erts_proc_sig_queue_enqueuer_force_flush_buffer(Process* proc,
                                                      Uint buffer_index,
                                                      ErtsSignalInQueueBufferArray* buffers);
@@ -1418,7 +1421,6 @@ erts_proc_sig_fetch(Process *proc)
 {
     Sint res = 0;
     ErtsSignal *sig;
-    Sint flush_number;
     ERTS_LC_ASSERT(ERTS_PROC_IS_EXITING(proc)
                    || ((erts_proc_lc_my_proc_locks(proc)
                         & (ERTS_PROC_LOCK_MAIN
@@ -1429,8 +1431,7 @@ erts_proc_sig_fetch(Process *proc)
     ERTS_HDBG_CHECK_SIGNAL_IN_QUEUE(proc);
     ERTS_HDBG_CHECK_SIGNAL_PRIV_QUEUE(proc, !0);
 
-    flush_number = erts_proc_sig_queue_flush_all_buffers(proc);
-    erts_proc_sig_queue_maybe_flush_and_deinstall_buffers(proc, flush_number);
+    erts_proc_sig_queue_flush_all_buffers(proc);
 
     sig = (ErtsSignal *) proc->sig_inq.first;
     if (sig) {
