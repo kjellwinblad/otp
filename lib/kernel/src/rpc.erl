@@ -137,7 +137,7 @@ handle_call({call, Mod, Fun, Args, Gleader}, To, S) ->
                        Reply = execute_call(Mod, Fun, Args),
                        gen_server:reply(To, Reply),
                        case Gleader of
-                           {send_to_caller, _} ->
+                           {send_stdout_to_caller, _} ->
                                group_leader() ! stop
                        end
                end,
@@ -211,8 +211,8 @@ handle_info({From, {call, Mod, Fun, Args, Gleader}}, S) ->
     To = {From, ?NAME},
     NewGleader =
         case Gleader of
-            send_to_caller ->
-                {send_to_caller, From};
+            send_stdout_to_caller ->
+                {send_stdout_to_caller, From};
             _ ->
                 Gleader
         end,
@@ -264,7 +264,7 @@ execute_call(Mod, Fun, Args) ->
 
 set_group_leader(Gleader) when is_pid(Gleader) -> 
     group_leader(Gleader, self());
-set_group_leader({send_to_caller, CallerPid}) ->
+set_group_leader({send_stdout_to_caller, CallerPid}) ->
     group_leader(cnode_call_group_leader_start(CallerPid), self());
 set_group_leader(user) -> 
     %% For example, hidden C nodes doesn't want any I/O.

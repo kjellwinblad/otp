@@ -122,7 +122,8 @@ typedef LONG_PTR ssize_t; /* Sigh... */
 #define ERL_DEMONITOR_P    20
 #define ERL_MONITOR_P_EXIT 21
 
-
+/* For ei_xrpc_to */
+#define EI_RPC_FETCH_STDOUT 1
 /* -------------------------------------------------------------------- */
 /*           Defines used for ei_get_type_internal() output             */
 /* -------------------------------------------------------------------- */

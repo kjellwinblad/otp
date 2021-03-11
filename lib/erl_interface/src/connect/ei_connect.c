@@ -1853,14 +1853,16 @@ int ei_xreceive_msg_tmo(int fd, erlang_msg *msg, ei_x_buff *x, unsigned ms)
 
 /* 
 * The RPC consists of two parts, send and receive.
-* Here is the send part ! 
-* { PidFrom, { call, Mod, Fun, Args, user }} 
+* Here is the send part when (flags | EI_RPC_FETCH_STDOUT) == 0:
+* { PidFrom, { call, Mod, Fun, Args, user }}
+* Here is the send part otherwise:
+* { PidFrom, { call, Mod, Fun, Args, send_stdout_to_caller }}
 */
 /*
 * Now returns non-negative number for success, negative for failure.
 */
-int ei_rpc_to(ei_cnode *ec, int fd, char *mod, char *fun,
-	      const char *buf, int len)
+int ei_xrpc_to(ei_cnode *ec, int fd, char *mod, char *fun,
+               const char *buf, int len, int flags)
 {
 
     ei_x_buff x;
@@ -1886,8 +1888,13 @@ int ei_rpc_to(ei_cnode *ec, int fd, char *mod, char *fun,
         goto einval;
     if (ei_x_append_buf(&x, buf, len) < 0)    /* B 4 */
         goto einval;
-    if (ei_x_encode_atom(&x, "send_to_caller") < 0)     /* B 5 */
-        goto einval;
+    if (flags & EI_RPC_FETCH_STDOUT) {
+        if (ei_x_encode_atom(&x, "send_stdout_to_caller") < 0)     /* B 5 */
+            goto einval;
+    } else {
+        if (ei_x_encode_atom(&x, "user") < 0)     /* B 5 */
+            goto einval;
+    }
     
     err = ei_send_reg_encoded(fd, self, "rex", x.buff, x.index);
     if (err)
@@ -1904,6 +1911,13 @@ error:
     if (x.buff != NULL)
         ei_x_free(&x);
     return err;
+} /* xrpc_to */
+
+
+int ei_rpc_to(ei_cnode *ec, int fd, char *mod, char *fun,
+	      const char *buf, int len)
+{
+    return ei_xrpc_to(ec, fd, mod, fun, buf, len, 0);
 } /* rpc_to */
 
   /*

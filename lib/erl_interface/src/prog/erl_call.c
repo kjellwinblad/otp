@@ -84,7 +84,8 @@ struct call_flags {
     int debugp;
     int verbosep;
     int haltp;
-    int getstdout;
+    int fetch_stdout;
+    int print_result_term;
     long port;
     char *hostname;
     char *cookie;
@@ -106,6 +107,9 @@ static void* ei_chk_malloc(size_t size);
 static void* ei_chk_calloc(size_t nmemb, size_t size);
 static void* ei_chk_realloc(void *old, size_t size);
 static char* ei_chk_strdup(char *s);
+static int rpc_print_node_stdout(ei_cnode* ec, int fd, char *mod,
+                                 char *fun, const char* inbuf,
+                                 int inbuflen, ei_x_buff* x);
 
 /* Converts the given hostname to a shortname, if required. */
 static void format_node_hostname(const struct call_flags *flags,
@@ -147,7 +151,8 @@ int main(int argc, char *argv[])
     ei_cnode ec;
     flags.port = -1;
     flags.hostname = NULL;
-    flags.getstdout = 0;
+    flags.fetch_stdout = 0;
+    flags.print_result_term = 1;
 
     ei_init();
 
@@ -210,8 +215,10 @@ int main(int argc, char *argv[])
 
             start_timeout(timeout);
             i++;
-        } else if (strcmp(argv[i], "-getstdout") == 0) {
-            flags.getstdout = 1;
+        } else if (strcmp(argv[i], "-fetchstdout") == 0) {
+            flags.fetch_stdout = 1;
+        } else if (strcmp(argv[i], "-discard_result_term") == 0) {
+            flags.print_result_term = 0;
         } else if (strcmp(argv[i], "-__uh_test__") == 0) {
             /* Fakes a failure in the call to ei_gethostbyname(h_hostname) so
              * we can test the localhost fallback. */
@@ -600,7 +607,8 @@ int main(int argc, char *argv[])
       len = read_stdin(&evalbuf);
       {
 	  int i = 0;
-	  char *p;
+          int rpc_res;
+          char *p;
 	  ei_x_buff reply;
 
 	  ei_encode_list_header(NULL, &i, 1);
@@ -618,7 +626,13 @@ int main(int argc, char *argv[])
 
 	  /* erl_format("[~w]", erl_mk_binary(evalbuf,len))) */
 
-	  if (ei_rpc(&ec, fd, "erl_eval", "eval_str", p, i, &reply) < 0) {
+          if (flags.fetch_stdout) {
+              rpc_res = rpc_print_node_stdout(&ec, fd, "erl_eval", "eval_str", p, i, &reply);
+          } else {
+              rpc_res = ei_rpc(&ec, fd, "erl_eval", "eval_str", p, i, &reply);
+          }
+
+	  if (rpc_res < 0) {
 	      fprintf(stderr,"erl_call: evaluating input failed: %s\n",
 		      evalbuf);
 	      free(p);
@@ -626,8 +640,10 @@ int main(int argc, char *argv[])
 	      ei_x_free(&reply);
 	      exit(1);
 	  }
-	  i = 0;
-	  ei_print_term(stdout,reply.buff,&i);
+          if (flags.print_result_term) {
+              i = 0;
+              ei_print_term(stdout,reply.buff,&i);
+          }
 	  free(p);
 	  free(evalbuf);	/* Allocated in read_stdin() */
 	  ei_x_free(&reply);
@@ -639,7 +655,7 @@ int main(int argc, char *argv[])
     if (flags.apply != NULL) {
       char *mod,*fun,*args;
       ei_x_buff e, reply;
-
+      int rpc_res;
       split_apply_string(flags.apply, &mod, &fun, &args);
       if (flags.verbosep) {
 	  fprintf(stderr,"erl_call: module = %s, function = %s, args = %s\n",
@@ -655,14 +671,21 @@ int main(int argc, char *argv[])
 
       ei_x_new_with_version(&reply);
 
-      if (ei_rpc(&ec, fd, mod, fun, e.buff, e.index, &reply) < 0) {
+      if (flags.fetch_stdout) {
+          rpc_res = rpc_print_node_stdout(&ec, fd, mod, fun, e.buff, e.index, &reply);
+      } else {
+          rpc_res = ei_rpc(&ec, fd, mod, fun, e.buff, e.index, &reply);
+      }
+      if (rpc_res < 0) {
 	  /* FIXME no error message and why -1 ? */
 	  ei_x_free(&e);
 	  ei_x_free(&reply);
 	  exit(-1);
       } else {
-	  int i = 0;
-	  ei_print_term(stdout,reply.buff,&i);
+          if (flags.print_result_term) {
+              int i = 0;
+              ei_print_term(stdout,reply.buff,&i);
+          }
 	  ei_x_free(&e);
 	  ei_x_free(&reply);
       }
@@ -992,4 +1015,78 @@ static char* ei_chk_strdup(char *s)
         exit(1);
     }
     return p;
+}
+
+static int rpc_print_node_stdout(ei_cnode* ec, int fd, char *mod,
+                                 char *fun, const char* inbuf,
+                                 int inbuflen, ei_x_buff* x)
+{
+    int i, index;
+    int got_rex_response = 0;
+    ei_term t;
+    erlang_msg msg;
+    char rex[MAXATOMLEN];
+
+    if (ei_xrpc_to(ec, fd, mod, fun, inbuf, inbuflen, EI_RPC_FETCH_STDOUT) < 0) {
+	return ERL_ERROR;
+    }
+
+    while (!got_rex_response) {
+        /* ei_rpc_from() responds with a tick if it gets one... */
+        while ((i = ei_rpc_from(ec, fd, ERL_NO_TIMEOUT, &msg, x)) == ERL_TICK)
+            ;
+
+        if (i == ERL_ERROR) return i;
+    
+        /* Expect: {rex, RPC_Reply} */
+
+        index = 0;
+        if (ei_decode_version(x->buff, &index, &i) < 0)
+            goto ebadmsg;
+
+        if (ei_decode_ei_term(x->buff, &index, &t) < 0)
+            goto ebadmsg;
+
+        if (t.ei_type != ERL_SMALL_TUPLE_EXT && t.ei_type != ERL_LARGE_TUPLE_EXT)
+            goto ebadmsg;
+
+        if (t.arity != 2)
+            goto ebadmsg;
+
+        if (ei_decode_atom(x->buff, &index, rex) < 0)
+            goto ebadmsg;
+
+        if (strcmp("rex_stdout", rex) == 0) {
+            int type;
+            int size;
+            char* binary_buff;
+            long actual_size;
+            ei_get_type(x->buff, &index, &type, &size);
+            if(type != ERL_BINARY_EXT) {
+                printf("TODO ERROR EXPECTED A BINARY HERE\n");
+                goto ebadmsg;
+            }
+            binary_buff = malloc(size + 1);
+        
+            ei_decode_binary(x->buff, &index, binary_buff, &actual_size);
+            binary_buff[size] = '\0';
+            printf("BEFORE PRINT\n");
+            printf("END BYTE %d\n", binary_buff[size-2]);
+            printf("END BYTE %d\n", binary_buff[size-1]);
+            printf("%s", binary_buff);
+        } else {
+            if(strcmp("rex", rex) != 0)
+                goto ebadmsg;
+            got_rex_response = 1;
+        }
+    }
+    /* remove header */
+    x->index -= index;
+    memmove(x->buff, &x->buff[index], x->index);
+    return 0;
+    
+ebadmsg:
+    
+    EI_CONN_SAVE_ERRNO__(EBADMSG);
+    return ERL_ERROR;
 }
