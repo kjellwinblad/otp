@@ -623,7 +623,6 @@ int main(int argc, char *argv[])
 	  ei_encode_empty_list(p, &i);
 
 	  ei_x_new_with_version(&reply);
-
 	  /* erl_format("[~w]", erl_mk_binary(evalbuf,len))) */
 
           if (flags.fetch_stdout) {
@@ -1023,6 +1022,7 @@ static int rpc_print_node_stdout(ei_cnode* ec, int fd, char *mod,
 {
     int i, index;
     int got_rex_response = 0;
+    int initial_buff_index = x->index;
     ei_term t;
     erlang_msg msg;
     char rex[MAXATOMLEN];
@@ -1066,14 +1066,15 @@ static int rpc_print_node_stdout(ei_cnode* ec, int fd, char *mod,
                 printf("TODO ERROR EXPECTED A BINARY HERE\n");
                 goto ebadmsg;
             }
-            binary_buff = malloc(size + 1);
+            binary_buff = ei_chk_malloc(size + 1);
         
             ei_decode_binary(x->buff, &index, binary_buff, &actual_size);
             binary_buff[size] = '\0';
-            printf("BEFORE PRINT\n");
-            printf("END BYTE %d\n", binary_buff[size-2]);
-            printf("END BYTE %d\n", binary_buff[size-1]);
             printf("%s", binary_buff);
+            free(binary_buff);
+            /* Reset the buffer as we need to read more and we have no
+               use for what we have already read */
+            x->index = initial_buff_index;
         } else {
             if(strcmp("rex", rex) != 0)
                 goto ebadmsg;
@@ -1087,6 +1088,5 @@ static int rpc_print_node_stdout(ei_cnode* ec, int fd, char *mod,
     
 ebadmsg:
     
-    EI_CONN_SAVE_ERRNO__(EBADMSG);
     return ERL_ERROR;
 }
