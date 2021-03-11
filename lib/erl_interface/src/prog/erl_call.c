@@ -84,6 +84,7 @@ struct call_flags {
     int debugp;
     int verbosep;
     int haltp;
+    int getstdout;
     long port;
     char *hostname;
     char *cookie;
@@ -146,6 +147,7 @@ int main(int argc, char *argv[])
     ei_cnode ec;
     flags.port = -1;
     flags.hostname = NULL;
+    flags.getstdout = 0;
 
     ei_init();
 
@@ -208,6 +210,8 @@ int main(int argc, char *argv[])
 
             start_timeout(timeout);
             i++;
+        } else if (strcmp(argv[i], "-getstdout") == 0) {
+            flags.getstdout = 1;
         } else if (strcmp(argv[i], "-__uh_test__") == 0) {
             /* Fakes a failure in the call to ei_gethostbyname(h_hostname) so
              * we can test the localhost fallback. */

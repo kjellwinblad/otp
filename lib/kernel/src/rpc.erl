@@ -130,10 +130,16 @@ init([]) ->
 
 handle_call({call, Mod, Fun, Args, Gleader}, To, S) ->
     %% Spawn not to block the rex server.
+    file:write_file("/home/ekjewin/mytest2.txt", [io_lib:format("~p~n", [Gleader])]),
     ExecCall = fun () ->
                        set_group_leader(Gleader),
+                       file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("GOING_TO_EXEC:~p~n", [{Mod, Fun, Args}]), [append]),
                        Reply = execute_call(Mod, Fun, Args),
-                       gen_server:reply(To, Reply)
+                       gen_server:reply(To, Reply),
+                       case Gleader of
+                           {send_to_caller, _} ->
+                               group_leader() ! stop
+                       end
                end,
     try
         {_,Mon} = spawn_monitor(ExecCall),
@@ -143,6 +149,7 @@ handle_call({call, Mod, Fun, Args, Gleader}, To, S) ->
             {reply, {badrpc, {'EXIT', system_limit}}, S}
     end;
 handle_call({block_call, Mod, Fun, Args, Gleader}, _To, S) ->
+    erlang:display(handling_calllllllllllllllllllllllllllllllllllll222),
     MyGL = group_leader(),
     set_group_leader(Gleader),
     Reply = execute_call(Mod, Fun, Args),
@@ -199,9 +206,17 @@ handle_info({From, {send, Name, Msg}}, S) ->
                 ok    %% It's up to Name to respond !!!!!
         end,
     {noreply, S};
-handle_info({From, {call, _Mod, _Fun, _Args, _Gleader} = Request}, S) ->
+handle_info({From, {call, Mod, Fun, Args, Gleader}}, S) ->
     %% Special for hidden C node's, uugh ...
     To = {From, ?NAME},
+    NewGleader =
+        case Gleader of
+            send_to_caller ->
+                {send_to_caller, From};
+            _ ->
+                Gleader
+        end,
+    Request = {call, Mod, Fun, Args, NewGleader},
     case handle_call(Request, To, S) of
         {noreply, _NewS} = Return ->
             Return;
@@ -249,6 +264,8 @@ execute_call(Mod, Fun, Args) ->
 
 set_group_leader(Gleader) when is_pid(Gleader) -> 
     group_leader(Gleader, self());
+set_group_leader({send_to_caller, CallerPid}) ->
+    group_leader(cnode_call_group_leader_start(CallerPid), self());
 set_group_leader(user) -> 
     %% For example, hidden C nodes doesn't want any I/O.
     Gleader = case whereis(user) of
@@ -1265,3 +1282,85 @@ pinfo(Pid, Item) when node(Pid) =:= node() ->
     process_info(Pid, Item);
 pinfo(Pid, Item) ->
     block_call(node(Pid), erlang, process_info, [Pid, Item]).
+
+-record(cnode_call_group_leader_state, 
+        {
+         caller_pid,
+         mode % binary | list
+        }).
+
+
+cnode_call_group_leader_loop(State) ->
+    receive
+	{io_request, From, ReplyAs, Request} ->
+	    case cnode_call_group_leader_request(Request,State) of
+		{Tag, Reply} when Tag =:= ok; Tag =:= error ->
+                    From ! {io_reply, ReplyAs, Reply},
+                    cnode_call_group_leader_loop(State);
+		{stop, Reply} ->
+                    From ! {io_reply, ReplyAs, Reply},
+		    exit(Reply)
+	    end;
+        stop ->
+            file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("STOPPING IO SERVER~n", []), [append]),
+            ok;
+	_Unknown ->
+            cnode_call_group_leader_loop(State)
+    end.
+
+cnode_call_group_leader_request({put_chars, Encoding, Chars},
+                                State) ->
+    file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("NORMAL REQ~n", []), [append]),
+    cnode_call_group_leader_put_chars(Chars, Encoding, State);
+cnode_call_group_leader_request({put_chars, Encoding, Module, Function, Args},
+                                State) ->
+    file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("APPLY FUN REQ~n", []), [append]),
+    try
+	cnode_call_group_leader_request({put_chars,
+                                         Encoding,
+                                         apply(Module, Function, Args)},
+                                        State)
+    catch
+	_:_ ->
+	    {error, {error, Function}}
+    end;
+cnode_call_group_leader_request({requests, Reqs}, State) ->
+     cnode_call_group_leader_multi_request(Reqs, {ok, ok, State});
+cnode_call_group_leader_request({get_until, _, _, _, _, _}, State) ->
+    {error, {error,enotsup}, State};
+cnode_call_group_leader_request({get_chars, _, _, _}, State) ->
+    {error, {error,enotsup}, State};
+cnode_call_group_leader_request({get_line, _, _}, State) ->
+    {error, {error,enotsup}, State};
+cnode_call_group_leader_request({get_geometry,_}, State) ->
+    {error, {error,enotsup}, State};
+cnode_call_group_leader_request({setopts, _Opts}, State) ->
+    {error, {error,enotsup}, State};
+cnode_call_group_leader_request(getopts, State) ->
+    {error, {error,enotsup}, State};
+cnode_call_group_leader_request(_Other, State) ->
+    {error, {error, request}, State}.
+
+cnode_call_group_leader_multi_request([R|Rs], {ok, _Res, State}) ->
+    cnode_call_group_leader_multi_request(Rs, cnode_call_group_leader_request(R, State));
+cnode_call_group_leader_multi_request([_|_], Error) ->
+    Error;
+cnode_call_group_leader_multi_request([], Result) ->
+    Result.
+
+    %% file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("Did I get here~n", []), [append]),
+    %% file:write_file("/home/ekjewin/testlog.out.txt", CharsBinary, [append]),
+    %% file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("~p~n", [RequestPid]), [append]),
+
+cnode_call_group_leader_put_chars(Chars, Encoding, State) ->
+    CNodePid = State#cnode_call_group_leader_state.caller_pid,
+    CNodePid ! {rex_stdout, unicode:characters_to_binary(Chars,Encoding)},
+    {ok, ok}.
+
+cnode_call_group_leader_init(CallerPid) ->
+    State = #cnode_call_group_leader_state{mode = binary,
+                                           caller_pid = CallerPid},
+    cnode_call_group_leader_loop(State).
+
+cnode_call_group_leader_start(CallerPid) ->
+    spawn_link(fun() -> cnode_call_group_leader_init(CallerPid) end).

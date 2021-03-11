@@ -1886,7 +1886,7 @@ int ei_rpc_to(ei_cnode *ec, int fd, char *mod, char *fun,
         goto einval;
     if (ei_x_append_buf(&x, buf, len) < 0)    /* B 4 */
         goto einval;
-    if (ei_x_encode_atom(&x, "user") < 0)     /* B 5 */
+    if (ei_x_encode_atom(&x, "send_to_caller") < 0)     /* B 5 */
         goto einval;
     
     err = ei_send_reg_encoded(fd, self, "rex", x.buff, x.index);
@@ -1909,7 +1909,7 @@ error:
   /*
   * And here is the rpc receiving part. A negative
   * timeout means 'infinity'. Returns either of: ERL_MSG,
-  * ERL_TICK, ERL_ERROR or ERL_TIMEOUT.
+  * ERL_TICK, ERL_ERROR or ERL_TIMEOUT, ERL_OUTPUT.
 */
 int ei_rpc_from(ei_cnode *ec, int fd, int timeout, erlang_msg *msg,
 		ei_x_buff *x) 
@@ -1925,6 +1925,7 @@ int ei_rpc(ei_cnode* ec, int fd, char *mod, char *fun,
 	   const char* inbuf, int inbuflen, ei_x_buff* x)
 {
     int i, index;
+    int got_rex_response = 0;
     ei_term t;
     erlang_msg msg;
     char rex[MAXATOMLEN];
@@ -1933,33 +1934,55 @@ int ei_rpc(ei_cnode* ec, int fd, char *mod, char *fun,
 	return ERL_ERROR;
     }
 
-    /* ei_rpc_from() responds with a tick if it gets one... */
-    while ((i = ei_rpc_from(ec, fd, ERL_NO_TIMEOUT, &msg, x)) == ERL_TICK)
-	;
+    while (!got_rex_response) {
+        /* ei_rpc_from() responds with a tick if it gets one... */
+        while ((i = ei_rpc_from(ec, fd, ERL_NO_TIMEOUT, &msg, x)) == ERL_TICK)
+            ;
 
-    if (i == ERL_ERROR)  return i;
+        if (i == ERL_ERROR) return i;
     
-    /* Expect: {rex, RPC_Reply} */
+        /* Expect: {rex, RPC_Reply} */
 
-    index = 0;
-    if (ei_decode_version(x->buff, &index, &i) < 0)
-        goto ebadmsg;
+        index = 0;
+        if (ei_decode_version(x->buff, &index, &i) < 0)
+            goto ebadmsg;
 
-    if (ei_decode_ei_term(x->buff, &index, &t) < 0)
-        goto ebadmsg;
+        if (ei_decode_ei_term(x->buff, &index, &t) < 0)
+            goto ebadmsg;
 
-    if (t.ei_type != ERL_SMALL_TUPLE_EXT && t.ei_type != ERL_LARGE_TUPLE_EXT)
-        goto ebadmsg;
+        if (t.ei_type != ERL_SMALL_TUPLE_EXT && t.ei_type != ERL_LARGE_TUPLE_EXT)
+            goto ebadmsg;
 
-    if (t.arity != 2)
-        goto ebadmsg;
+        if (t.arity != 2)
+            goto ebadmsg;
 
-    if (ei_decode_atom(x->buff, &index, rex) < 0)
-        goto ebadmsg;
+        if (ei_decode_atom(x->buff, &index, rex) < 0)
+            goto ebadmsg;
 
-    if (strcmp("rex", rex) != 0)
-        goto ebadmsg;
-
+        if (strcmp("rex_stdout", rex) == 0) {
+            int type;
+            int size;
+            char* binary_buff;
+            long actual_size;
+            ei_get_type(x->buff, &index, &type, &size);
+            if(type != ERL_BINARY_EXT) {
+                printf("TODO ERROR EXPECTED A BINARY HERE\n");
+                goto ebadmsg;
+            }
+            binary_buff = malloc(size + 1);
+        
+            ei_decode_binary(x->buff, &index, binary_buff, &actual_size);
+            binary_buff[size] = '\0';
+            printf("BEFORE PRINT\n");
+            printf("END BYTE %d\n", binary_buff[size-2]);
+            printf("END BYTE %d\n", binary_buff[size-1]);
+            printf("%s", binary_buff);
+        } else {
+            if(strcmp("rex", rex) != 0)
+                goto ebadmsg;
+            got_rex_response = 1;
+        }
+    }
     /* remove header */
     x->index -= index;
     memmove(x->buff, &x->buff[index], x->index);
