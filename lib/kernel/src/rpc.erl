@@ -130,19 +130,19 @@ init([]) ->
 
 handle_call({call, Mod, Fun, Args, Gleader}, To, S) ->
     %% Spawn not to block the rex server.
-    file:write_file("/home/ekjewin/mytest2.txt", [io_lib:format("~p~n", [Gleader])]),
     ExecCall = fun () ->
                        set_group_leader(Gleader),
-                       file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("GOING_TO_EXEC:~p~n", [{Mod, Fun, Args}]), [append]),
+                       GleaderBeforeCall = group_leader(),
                        Reply = execute_call(Mod, Fun, Args),
                        case Gleader of
                            {send_stdout_to_caller, _} ->
                                %% We need to synchronize with the
                                %% group leader to make sure all data
                                %% has been sent
-                               group_leader() ! {stop, self()},
+                               Ref = make_ref(),
+                               GleaderBeforeCall ! {stop, self(), Ref},
                                receive
-                                   exiting -> ok
+                                   {exiting, Ref} -> ok
                                end
                        end,
                        gen_server:reply(To, Reply)
@@ -155,7 +155,6 @@ handle_call({call, Mod, Fun, Args, Gleader}, To, S) ->
             {reply, {badrpc, {'EXIT', system_limit}}, S}
     end;
 handle_call({block_call, Mod, Fun, Args, Gleader}, _To, S) ->
-    erlang:display(handling_calllllllllllllllllllllllllllllllllllll222),
     MyGL = group_leader(),
     set_group_leader(Gleader),
     Reply = execute_call(Mod, Fun, Args),
@@ -1302,13 +1301,10 @@ cnode_call_group_leader_loop(State) ->
 	    case cnode_call_group_leader_request(Request,State) of
 		{Tag, Reply} when Tag =:= ok; Tag =:= error ->
                     From ! {io_reply, ReplyAs, Reply},
-                    cnode_call_group_leader_loop(State);
-		{stop, Reply} ->
-                    From ! {io_reply, ReplyAs, Reply},
-		    exit(Reply)
+                    cnode_call_group_leader_loop(State)
 	    end;
-        {stop, RespondToPid} ->
-            RespondToPid ! exiting,
+        {stop, RespondToPid, Ref} ->
+            RespondToPid ! {exiting, Ref},
             ok;
 	_Unknown ->
             cnode_call_group_leader_loop(State)
@@ -1316,11 +1312,9 @@ cnode_call_group_leader_loop(State) ->
 
 cnode_call_group_leader_request({put_chars, Encoding, Chars},
                                 State) ->
-    file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("NORMAL REQ~n", []), [append]),
     cnode_call_group_leader_put_chars(Chars, Encoding, State);
 cnode_call_group_leader_request({put_chars, Encoding, Module, Function, Args},
                                 State) ->
-    file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("APPLY FUN REQ~n", []), [append]),
     try
 	cnode_call_group_leader_request({put_chars,
                                          Encoding,
@@ -1354,18 +1348,13 @@ cnode_call_group_leader_multi_request([_|_], Error) ->
 cnode_call_group_leader_multi_request([], Result) ->
     Result.
 
-    %% file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("Did I get here~n", []), [append]),
-    %% file:write_file("/home/ekjewin/testlog.out.txt", CharsBinary, [append]),
-    %% file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("~p~n", [RequestPid]), [append]),
-
 cnode_call_group_leader_put_chars(Chars, Encoding, State) ->
     CNodePid = State#cnode_call_group_leader_state.caller_pid,
     CNodePid ! {rex_stdout, unicode:characters_to_binary(Chars,Encoding)},
     {ok, ok}.
 
 cnode_call_group_leader_init(CallerPid) ->
-    State = #cnode_call_group_leader_state{mode = binary,
-                                           caller_pid = CallerPid},
+    State = #cnode_call_group_leader_state{caller_pid = CallerPid},
     cnode_call_group_leader_loop(State).
 
 cnode_call_group_leader_start(CallerPid) ->
