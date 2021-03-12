@@ -215,9 +215,9 @@ int main(int argc, char *argv[])
 
             start_timeout(timeout);
             i++;
-        } else if (strcmp(argv[i], "-fetchstdout") == 0) {
+        } else if (strcmp(argv[i], "-fetch_stdout") == 0) {
             flags.fetch_stdout = 1;
-        } else if (strcmp(argv[i], "-discard_result_term") == 0) {
+        } else if (strcmp(argv[i], "-no_result_term") == 0) {
             flags.print_result_term = 0;
         } else if (strcmp(argv[i], "-__uh_test__") == 0) {
             /* Fakes a failure in the call to ei_gethostbyname(h_hostname) so
@@ -934,6 +934,12 @@ static void usage_noexit(const char *progname) {
   fprintf(stderr,"         -d  direct Erlang output to ~/.erl_call.out.<Nodename>\n");
   fprintf(stderr,"         -e  evaluate contents of standard input (e.g., echo \"X=1,Y=2,{X,Y}.\"|%s -e ...)\n",
           progname);
+  fprintf(stderr,
+          "         -fetch_stdout\n"
+          "           forward what the called function and its descendant prints\n"
+          "           to stdout (standard output) to stdout of the %s process (utf8 encoded).\n"
+          "           See the erl_call man page for a more detailed explanation.\n",
+          progname);
   fprintf(stderr,"         -h  specify a name for the erl_call client node\n");
   fprintf(stderr,"         -m  read and compile Erlang module from stdin\n");
   fprintf(stderr,"         -n  name of Erlang node, same as -name\n");
@@ -944,6 +950,7 @@ static void usage_noexit(const char *progname) {
           "                  (e.g., %s -address my_host:36303 ...)\n"
           "                  (cannot be combinated with -s, -n, -name and -sname)\n",
           progname);
+  fprintf(stderr,"         -no_result_term  do not print the result term\n");
   fprintf(stderr,"         -timeout  command timeout, in seconds\n");
   fprintf(stderr,"         -q  halt the Erlang node (overrides the -s switch)\n");
   fprintf(stderr,"         -r  use a random name for the erl_call client node\n");
@@ -1016,6 +1023,19 @@ static char* ei_chk_strdup(char *s)
     return p;
 }
 
+/*
+ * Helper function that that:
+ *
+ * 1. Executes a function on a remote node
+ *
+ * 2. Forwards what the executed function and its subprocesses prints
+ *    to stdout to stdout of this process
+ *
+ * 3. Returns the result of the executed function (the result term is
+ *    written to the buffer pointed to by x)
+ *
+ * This function is similar to (and is based on) the function ei_rpc
+ */
 static int rpc_print_node_stdout(ei_cnode* ec, int fd, char *mod,
                                  char *fun, const char* inbuf,
                                  int inbuflen, ei_x_buff* x)
@@ -1026,7 +1046,7 @@ static int rpc_print_node_stdout(ei_cnode* ec, int fd, char *mod,
     ei_term t;
     erlang_msg msg;
     char rex[MAXATOMLEN];
-
+ 
     if (ei_xrpc_to(ec, fd, mod, fun, inbuf, inbuflen, EI_RPC_FETCH_STDOUT) < 0) {
 	return ERL_ERROR;
     }
@@ -1037,8 +1057,6 @@ static int rpc_print_node_stdout(ei_cnode* ec, int fd, char *mod,
             ;
 
         if (i == ERL_ERROR) return i;
-    
-        /* Expect: {rex, RPC_Reply} */
 
         index = 0;
         if (ei_decode_version(x->buff, &index, &i) < 0)
@@ -1063,11 +1081,9 @@ static int rpc_print_node_stdout(ei_cnode* ec, int fd, char *mod,
             long actual_size;
             ei_get_type(x->buff, &index, &type, &size);
             if(type != ERL_BINARY_EXT) {
-                printf("TODO ERROR EXPECTED A BINARY HERE\n");
                 goto ebadmsg;
             }
             binary_buff = ei_chk_malloc(size + 1);
-        
             ei_decode_binary(x->buff, &index, binary_buff, &actual_size);
             binary_buff[size] = '\0';
             printf("%s", binary_buff);
@@ -1085,8 +1101,8 @@ static int rpc_print_node_stdout(ei_cnode* ec, int fd, char *mod,
     x->index -= index;
     memmove(x->buff, &x->buff[index], x->index);
     return 0;
-    
+
 ebadmsg:
-    
+
     return ERL_ERROR;
 }

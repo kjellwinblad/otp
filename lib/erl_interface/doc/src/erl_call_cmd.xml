@@ -116,6 +116,33 @@
               expressions and returns the result from the last expression.
               Returns <c>{ok,Result}</c> on success.</p>
           </item>
+          <tag><c>-fetch_stdout</c></tag>
+          <item>
+            <p>
+              (<em>Optional.</em>) Executes the given code in a new
+              process with a <seemfa
+              marker="erts:erlang#group_leader/0">group
+              leader</seemfa> that forwards all stdout (standard
+              output) data so that it is printed to stdout of the
+              <c>erl_call</c> process. This means that stdout data
+              that is written during the execution of the called code
+              by the code and by descendant processes (spawned
+              directly and indirectly by the code) will be forwarded
+              (given that the group leader has not been changed by a
+              call to <seemfa
+              marker="erts:erlang#group_leader/2"><c>erlang:group_leader/2</c></seemfa>).
+              The printed data is UTF-8 encoded.
+            </p>
+            <p>
+              This option is only relevant together with the options
+              <c>-a</c> and <c>-e</c>.
+            </p>
+            <p>
+              See the documentation of the <seeguide
+              marker="stdlib:io_protocol">the I/O protocol</seeguide>,
+              for more information about the group leader concept.
+            </p>
+          </item>
           <tag><c>-h HiddenName</c></tag>
           <item>
             <p>(<em>Optional.</em>) Specifies the name of the hidden node
@@ -144,6 +171,12 @@
               qualified long node names are used. If option
               <c>-s</c> is specified, an Erlang node will (if
               necessary) be started with <c>erl -name</c>.</p>
+          </item>
+          <tag><c>-no_result_term</c></tag>
+          <item>
+            <p>(<em>Optional.</em>) Do not print the result term. This
+            option is only relevant together with the options
+            <c>-a</c> and <c>-e</c>.</p>
           </item>
           <tag><c>-q</c></tag>
           <item>

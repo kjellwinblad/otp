@@ -135,11 +135,17 @@ handle_call({call, Mod, Fun, Args, Gleader}, To, S) ->
                        set_group_leader(Gleader),
                        file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("GOING_TO_EXEC:~p~n", [{Mod, Fun, Args}]), [append]),
                        Reply = execute_call(Mod, Fun, Args),
-                       gen_server:reply(To, Reply),
                        case Gleader of
                            {send_stdout_to_caller, _} ->
-                               group_leader() ! stop
-                       end
+                               %% We need to synchronize with the
+                               %% group leader to make sure all data
+                               %% has been sent
+                               group_leader() ! {stop, self()},
+                               receive
+                                   exiting -> ok
+                               end
+                       end,
+                       gen_server:reply(To, Reply)
                end,
     try
         {_,Mon} = spawn_monitor(ExecCall),
@@ -1283,10 +1289,10 @@ pinfo(Pid, Item) when node(Pid) =:= node() ->
 pinfo(Pid, Item) ->
     block_call(node(Pid), erlang, process_info, [Pid, Item]).
 
--record(cnode_call_group_leader_state, 
+%% A record is used for the cnode c
+-record(cnode_call_group_leader_state,
         {
-         caller_pid,
-         mode % binary | list
+         caller_pid
         }).
 
 
@@ -1301,8 +1307,8 @@ cnode_call_group_leader_loop(State) ->
                     From ! {io_reply, ReplyAs, Reply},
 		    exit(Reply)
 	    end;
-        stop ->
-            file:write_file("/home/ekjewin/testlog.out.txt", io_lib:format("STOPPING IO SERVER~n", []), [append]),
+        {stop, RespondToPid} ->
+            RespondToPid ! exiting,
             ok;
 	_Unknown ->
             cnode_call_group_leader_loop(State)
